@@ -1,0 +1,57 @@
+{% meta %}
+  title: Блог
+{% endmeta %}
+
+{% block content %}
+<a href="http://github.com/{{ site.author_github }}">
+    <img style="position: absolute; top: 0; left: 0; border: 0;"
+         src="http://s3.amazonaws.com/github/ribbons/forkme_left_gray_6d6d6d.png"
+         alt="Fork me on GitHub">
+</a>
+
+<div id="posts">
+
+    {% for post in site.posts[:3] %}
+    <div class="post">
+        <span class="date">
+            <a href="{{ post.get_url() }}">
+            <span class="diff">{{ post.date.day }}</span>/{{ post.date.month }}/{{ post.date.year }}
+            </a>
+        </span>
+        <div class="regular">
+            <h3>{{ post.title }} <a class="permalink" href="{{ post.get_absolute_url() }}">∞</a></h3>
+            <div class="post-body">
+                {{ post.body }}
+            </div>
+        </div>
+        {% if post.tags %}
+        <ul class="post-footer">
+            {% for tag in post.tags %}
+            <li><a href="{{ site.tag_cache.get(tag).get_url() }}">#{{ tag }}</a></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% for post in site.posts[3:10] %}
+    <div class="post">
+        <span class="date">
+            <a href="{{ post.get_url() }}">
+            <span class="diff">{{ post.date.day }}</span>/{{ post.date.month }}/{{ post.date.year }}
+            </a>
+        </span>
+        <div class="regular">
+            <h3>{{ post.title }} <a class="permalink" href="{{ post.get_absolute_url() }}">∞</a></h3>
+        </div>
+    </div>
+    {% endfor %}
+
+<div id="previous-next">
+    <a class="archive" href="{{ url_for('blog/archive') }}">Все статьи</a>
+</div>
+
+
+</div>
+
+{% endblock %}

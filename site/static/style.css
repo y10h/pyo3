@@ -1,0 +1,312 @@
+/* CSS Reset by Eric Meyer
+ * http://meyerweb.com/eric/thoughts/2007/05/01/reset-reloaded/
+ */
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr,
+acronym, address, big, cite, code, del, dfn, em, font,
+img, ins, kbd, q, s, samp, small, strike, strong, sub,
+sup, tt, var, dl, dt, dd, ol, ul, li, fieldset, form,
+label, legend, table, caption, tbody, tfoot, thead, tr, th, td {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    font-weight: inherit;
+    font-style: inherit;
+    font-size: 100%;
+    font-family: inherit;
+    vertical-align: baseline;
+}
+
+body {
+    line-height: 1;
+    color: black;
+    background: white;
+}
+
+ol, ul {
+    list-style: none;
+}
+
+table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+caption, th, td {
+    text-align: left;
+    font-weight: normal;
+}
+
+blockquote:before, blockquote:after, q:before, q:after {
+    content: "";
+}
+
+blockquote, q {
+    quotes: "" "";
+}
+
+strong {
+    font-weight: bold;
+}
+
+em {
+    font-weight: italic;
+}
+
+/* end of CSS reset */
+
+body {
+    background: #262523;
+    color: #ddc;
+    font: normal 15px Helvetica, "Trebuchet MS", Arial, sans-serif;
+    line-height: 1.5em;
+}
+
+h1 {
+    font-size: 3em;
+    font-weight: bold;
+    line-height: 1em;
+}
+
+h2 {
+    color: #ccb;
+    font-size: 1em;
+    font-weight: normal;
+    padding-left: 3em;
+}
+
+p {
+    margin: 0 0 1.5em;
+}
+
+a, a:visited, a:active {
+    color: #c93633;
+    text-decoration: underline;
+}
+
+a:hover {
+    color: #262523;
+    text-decoration: none;
+}
+
+abbr {
+    border-bottom-width: 1px;
+    border-bottom-style: dotted;
+}
+
+blockquote {
+    background-color: #4f534f;
+    border: 1px solid #333;
+    font-style: italic;
+}
+
+ul, ol {
+    margin: 1.5em 3em;
+}
+
+ul {
+    list-style: disc;
+}
+
+ol {
+    list-style: decimal;
+}
+
+/* Header */
+
+#header {
+    margin: 1em auto;
+    width: 40em;
+    line-height: 2em;
+}
+
+#header a, #header a:visited, #header a:active {
+    color: #eef;
+    text-decoration: none;
+}
+
+#header a:hover {
+    color: #ccb;
+}
+
+
+
+/* Posts */
+
+#posts, #content {
+    margin: 0 auto;
+    width: 50em;
+}
+
+#root {
+    margin: 10em auto;
+    width: 40em;
+    
+}
+
+#root a, #root a:visited, #root a:active {
+    text-decoration: none;
+}
+
+#root a:hover {
+    color: #c93633;
+    text-decoration: underline;
+}
+
+/* Indivisual Post */
+
+.post {
+    background-color: #363b39;
+    border: 1px solid #494949;
+    margin: 1.5em 0;
+    padding: 1em;
+}
+
+.post .date {
+    display: block;
+    font-size: 1.5em;
+    font-weight: normal;
+    margin-bottom: 0.5em;
+    text-align: right;
+}
+
+.post .date a, .post .date a:visited, .post .date a:active {
+    color: #94a970;
+    text-decoration: none;
+}
+
+.post .date a:hover {
+    color: #262523;
+}
+
+.post .date a .diff {
+    font-size: 1.6em;
+    line-height: 0;
+}
+
+/* Titles */
+.regular h3, .link h3 {
+    color: #c93633;
+    font-size: 2em;
+    line-height: 1em;
+    margin-bottom: .5em;
+}
+
+.link h3 a, .link h3 a:visited, .link h3 a:active {
+    text-decoration: underline;
+}
+
+.link h3 a:hover {
+    text-decoration: none;
+}
+
+/* Post Footer */
+
+.post-footer {
+    list-style-type: none;
+    margin: 1.5em 0 0;
+    padding: 0;
+    text-align: center;
+    font-size: 80%;
+}
+
+.post-footer li {
+    display: inline;
+    margin-right: 1em;
+}
+
+.post-footer li a, .post-footer a:visited, .post-footer a:active {
+    text-decoration: none;
+}
+
+.post-footer li a:hover {
+    text-decoration: underline;
+    color: #c93633;
+}
+
+a.permalink, a.permalink:visited, a.permalink:active {
+    color: #94a970;
+    text-decoration: none;
+}
+
+a.permalink:hover {
+    color: #262523; 
+}
+
+/* Notes */
+#notes-container {
+    margin: 3em 0;
+    display: none;
+}
+
+#notes-container h3 {
+    font-size: 1.25em;
+}
+
+#notes-container .notes {
+    list-style-type: none;
+    margin: 1.5em 0 0;
+    padding: 0;
+}
+
+#notes-container .notes li {
+    border-bottom: 1px solid #363b39;
+    padding: 0.25em 0;
+}
+
+#notes-container a, #notes-container a:visited, #notes-container a:active {
+    text-decoration: none;
+}
+
+#notes-container a:hover {
+    color: #c93633;
+    text-decoration: underline;
+}
+
+/* Previous and Next links */
+#previous-next {
+    font-size: 1.25em;
+    margin: 3em 0 2em;
+    text-align: center;
+}
+
+#previous-next a, #previous-next a:visited, #previous-next a:active {
+    text-decoration: none;
+}
+
+#previous-next a:hover {
+    color: #94a970;
+    text-decoration: underline;
+}
+
+/* Footer */
+#footer {
+    border-top: 1px solid #555;
+    margin: 0 auto;
+    width: 40em;
+}
+
+#footer #copyright {
+    font-size: 70%;
+}
+
+#footer ul {
+    list-style: none;
+    text-align: center;
+}
+
+#footer ul li {
+    display: inline;
+    margin: 0 1em;
+}
+
+#footer ul li a, #footer ul li a:visited, #footer ul li a:active {
+    color: #94a970;
+    text-decoration: none;
+}
+
+#footer ul li a:hover {
+    text-decoration: underline;
+}

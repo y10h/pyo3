@@ -1,0 +1,45 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<a href="http://github.com/{{ site.author_github }}">
+    <img style="position: absolute; top: 0; left: 0; border: 0;"
+         src="http://s3.amazonaws.com/github/ribbons/forkme_left_gray_6d6d6d.png"
+         alt="Fork me on GitHub">
+</a>
+
+<div id="posts">
+
+    <div class="post">
+        <span class="date">
+            <a href="{{ entry.get_url() }}">
+            <span class="diff">{{ entry.date.day }}</span>/{{ entry.date.month }}/{{ entry.date.year }}
+            </a>
+        </span>
+        <div class="regular">
+            <h3>{{ entry.title }} <a class="permalink" href="{{ entry.get_absolute_url() }}">∞</a></h3>
+            <div class="post-body">
+                {{ entry.body }}
+            </div>
+        </div>
+        {% if entry.tags %}
+        <ul class="post-footer">
+            {% for tag in entry.tags %}
+            <li><a href="{{ site.tag_cache.get(tag).get_url() }}">#{{ tag }}</a></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    
+    <div id="notes-container">
+        <h3>Мнения</h3>
+        <ul class="notes">
+        </ul>
+    </div>
+
+<div id="previous-next">
+    <a class="archive" href="{{ url_for('blog/archive') }}">Все статьи</a>
+</div>
+
+</div>
+
+{% endblock %}

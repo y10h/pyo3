@@ -1,0 +1,58 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=720, user-scalable=yes">    
+
+    <meta name="author" content="{{ site.author }}">
+    <meta name="description" content="{{ site.description }}">
+    <meta name="application-name" content="PyObject">
+    <meta name="application-url" content="{{ site.url }}">
+
+    <link rel="stylesheet" type="text/css" media="screen"
+          href="{{ url_for('static/style.css') }}">
+
+    <link rel="alternate" type="appliction/atom+xml"
+          title="{{ site.title }} feed"
+          href="http://feeds.feedburner.com/pyobject">
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+
+    <title>
+        {{ site.title }}{% block title %}: {{ entry.title }}{% endblock %}
+    </title>
+
+    {% block extrahead %}{% endblock %}
+
+</head>
+
+<body>
+    <div id="header">
+            <h1><a href="/">{{ site.title }}</a></h1>
+            <h2>{{ site.description }}</h2>
+    </div>
+
+    {% block content %}
+    {% endblock %}
+
+
+    <div id="footer">
+    {% if show_meta %}
+        <ul id="meta-info">
+            <li><a href="http://twitter.com/{{ site.author_twitter }}">Twitter</a></li>
+            <li><a href="http://{{ site.author_chimp }}.mp">Lifeflow</a></li>
+            <li><a href="http://linkedin.com/in/{{ site.author_linkedin }}">Linkedin</a></li>
+        </ul>
+    {% endif %}
+
+        <ul id="copyright">
+            <li>&copy {{ site.copyright }} <a href="{{ url_for('/about') }}">@{{ site.author_twitter }}</a></li>
+            <li>design inspired by <a href="http://cubicle17.com">cubicle17</a></li>
+            <li>live somewhere in <a href="http://deepforest.ru">deep forest</a>
+        </ul>
+    </div>
+</body>
+
+
+</html>

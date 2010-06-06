@@ -38,7 +38,7 @@ def add_posts_permalinks(site):
     for post in site.posts:
         path = '%s%s.html' % (PostPermalink.prefix, post.slug)
         site.entries.append(core.Entry(site, path, '_permalink.html'))
-        site.permalinks[post.slug] = post.get_absolute_url()
+        site.permalinks[post.slug] = post
 
 def callback(site):
     events.events.connect('site-traversed', add_posts_permalinks)

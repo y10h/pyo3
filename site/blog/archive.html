@@ -1,0 +1,29 @@
+{% meta %}
+  title: Все статьи
+{% endmeta %}
+
+{% block content %}
+<a href="http://github.com/{{ site.author_github }}">
+    <img style="position: absolute; top: 0; left: 0; border: 0;"
+         src="http://s3.amazonaws.com/github/ribbons/forkme_left_gray_6d6d6d.png"
+         alt="Fork me on GitHub">
+</a>
+
+<div id="posts">
+
+    {% for post in site.posts %}
+    <div class="post">
+        <span class="date">
+            <a href="{{ post.get_url() }}">
+            <span class="diff">{{ post.date.day }}</span>/{{ post.date.month }}/{{ post.date.year }}
+            </a>
+        </span>
+        <div class="regular">
+            <h3>{{ post.title }} <a class="permalink" href="{{ post.get_absolute_url() }}">∞</a></h3>
+        </div>
+    </div>
+    {% endfor %}
+
+</div>
+
+{% endblock %}
