@@ -31,9 +31,9 @@ PAGE_TEMPLATE = string.Template(u"""\
     title: $title
 {% endmeta %}
 
-{% mark body %}
+{% block content %}
 $content
-{% endmark %}
+{% endblock %}
 """)
 
 
