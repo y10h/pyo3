@@ -4,6 +4,7 @@ Migration script for move data from Byteflow instance and generate Cyrax site
 """
 
 import os
+import re
 import string
 from cyraxlib import utils
 
@@ -46,7 +47,7 @@ def get_post_context(bf_post):
     data = {
         'title': bf_post.name,
         'slug': bf_post.slug,
-        'post': bf_post.text,
+        'post': jinja_escape(bf_post.text),
         'timestamp': str(bf_post.date),
         'year': '%d' % bf_post.date.year,
         'month': '%02d' % bf_post.date.month,
@@ -67,6 +68,14 @@ def get_post_context(bf_post):
         )
     return data
 
+
+def jinja_escape(text):
+    for statement, repl in (
+        (r"{{(.+?)}}", r"{{ '{{' }}\1{{ '}}' }}"),
+        (r"{%(.+?)%}", r"{{ '{%' }}\1{{ '%}' }}"),
+    ):
+        text = re.sub(statement, repl, text)
+    return text
 
 def write_cyrax(template, context, path):
     dirname = os.path.dirname(path)
