@@ -140,11 +140,17 @@ ol {
     width: 50em;
 }
 
+#content {
+    background-color: #363b39;
+    border: 1px solid #494949;
+    padding: 1em;
+}
+
 #root {
     margin: 10em auto;
     width: 40em;
-    
 }
+
 
 #root a, #root a:visited, #root a:active {
     text-decoration: none;
