@@ -1,0 +1,76 @@
+{% meta %}
+    tags: [mine, pytils, packages]
+    title: PyTils - простой обработчик русского текста
+{% endmeta %}
+
+{% mark body %}
+Вдохновленный <a href="http://www.pyobject.ru/blog/post/getrelativetime-in-russian/">getRelativeTime() </a> и <a href="http://rutils.rubyforge.org/">RuTils</a>, написал <a href="http://pythy.googlecode.com/svn/tags/pytils/0_1_0/dist/pytils-0.1.0.tar.gz">PyTils</a> - обработчик русского текста.
+
+<!--more-->
+
+Что умеет pytils:
+
+<h2>Числительные</h2>
+<p>Pytils умеет выбирать правильную форму существительного в зависимости от числа
+</p>
+<pre><code>&gt;&gt;&gt; pytils.numeral.choose_plural(15, (u&quot;гвоздь&quot;, u&quot;гвоздя&quot;, u&quot;гвоздей&quot;))
+u'гвоздей'
+
+</code></pre><p>В качестве второго параметра передается кортеж с вариантами. Чтобы легко запомнить, в каком порядке указывать варианты, пользуйтесь мнемоническим правилом: один-два-пять - один гвоздь, два гвоздя, пять гвоздей.
+</p>
+<p>Также pytils реализует числа прописью
+</p>
+<pre><code>&gt;&gt;&gt; pytils.numeral.in_words(254)
+u'двести пятьдесят четыре'
+&gt;&gt;&gt; pytils.numeral.in_words(2.01)
+u'две целых одна сотая'
+&gt;&gt;&gt; pytils.numeral.rubles(2.01)
+u'два рубля одна копейка'
+&gt;&gt;&gt; pytils.numeral.sum_string(32, 1, (u&quot;гвоздь&quot;, u&quot;гвоздя&quot;, u&quot;гвоздей&quot;))
+u'тридцать два гвоздя'
+&gt;&gt;&gt; pytils.numeral.sum_string(21, 2, (u&quot;белка&quot;, u&quot;белки&quot;, u&quot;белок&quot;))
+u'двадцать одна белка'
+</code></pre>
+<h2>Даты</h2>
+<p>В pytils можно получить русские даты без использования локалей.
+</p>
+<pre><code>&gt;&gt;&gt; pytils.dt.ru_strftime(u&quot;сегодня - %d %B %Y, %A&quot;, inflected=True)
+u'сегодня - 02 сентября 2006, суббота'
+
+</code></pre><p>и получить величину периода:
+</p>
+<pre><code>&gt;&gt;&gt; pytils.dt.distance_of_time_in_words(time.time()-10000)
+u'2 часа назад'
+&gt;&gt;&gt; pytils.dt.distance_of_time_in_words(time.time()+10000, accuracy=2)
+u'через 2 часа 46 минут'
+</code></pre>
+<h2>Транслитерация</h2>
+<p>При помощи pytils можно сделать транслитерацию:
+</p>
+<pre><code>&gt;&gt;&gt; print pytils.translit.translify(u&quot;Проверка связи&quot;)
+'Proverka svyazi'
+&gt;&gt;&gt; pytils.translit.detranslify(&quot;Proverka svyazi&quot;)
+u'Проверка связи'
+
+</code></pre><p>В translify вывод - str, а не unicode. В detranslify вход может быть как unicode, так и str.
+</p>
+<p>И сделать строку для URL (удаляются лишние символы, пробелы заменяются на дефисы):
+</p>
+<pre><code>&gt;&gt;&gt; pytils.translit.slugify(u&quot;тест и еще раз тест&quot;)
+'test-i-esche-raz-test'
+</code></pre>
+
+<h3>Еще</h3>
+Поскольку на данный момент я не нуждаюсь в дополнительных возможностях, то задаю Вам вопрос: нужно ли в PyTils добавлять:
+<ul>
+	<li><a href="http://pixel-apes.com/translit/article#h256-10">BiDi-транслитерацию</a></li>
+	<li><a href="http://pixel-apes.com/typografica">Tыпографицу</a> (или <a href="http://rutils.rubyforge.org/">Гиленсон</a>)</li>
+</ul>
+
+Ответы пишите в комментариях.
+
+<h3>Скачать</h3>
+Последнюю версию можно получить по svn (при помощи любого <a href="http://subversion.tigris.org/links.html#clients">svn-клиента</a>) по адресу <a href="http://pythy.googlecode.com/svn/trunk/pytils/">http://pythy.googlecode.com/svn/trunk/pytils/</a>. А версию 0.1.0 - взять <a href="http://pythy.googlecode.com/svn/tags/pytils/0_1_0/dist/pytils-0.1.0.tar.gz">отсюда</a>.
+
+P.S. Для создания актуальной документации по API вам понадобится <a href="http://epydoc.sourceforge.net/">epydoc</a>
+{% endmark %}

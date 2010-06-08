@@ -1,0 +1,95 @@
+{% meta %}
+    tags: [docs, twisted, unicode]
+    title: От Perl-скрипта к Twisted-приложению: Переходим на Unicode
+{% endmeta %}
+
+{% mark body %}
+<p>В случае, если предполагается, что приложение будет работать более чем с одной 
+   кодировкой, то оправдано использование unicode для внутреннего представления 
+   данных. При таком решении, перекодировка осуществляется только на входе/выходе 
+   данных и информация о кодировках &quot;концентрируется&quot; в этих местах, а не 
+   &quot;таскается&quot; по всему приложению.
+</p>
+<p>
+<!--more-->
+
+   Если говорить про демо-приложение <a href="http://www.pyobject.ru/blog/post/from-perl-script-to-twisted-app-making-app-async/">TwistedPythy</a>, то у транспорта и БД 
+   кодировки вполне могут быть различными (например, у меня вышло, что у 
+   транспорта cp866, а у БД - cp1251). Выделяю места, где будут происходить 
+   перекодировки из/в unicode:
+
+</p>
+<ul>
+ <li>
+     вход транспорта (lineReceived), из строки в кодировке транспорта в unicode
+ </li>
+
+ <li>
+     выход транспорта (sendLine), из unicode в строку в кодировке транспорта
+ </li>
+
+ <li>
+     вход клиента (getClient), из unicode в строку в кодировке БД
+ </li>
+
+ <li>
+     выход клиента (getClient), из строки в кодировке в кодировке БД в unicode
+ </li>
+</ul>
+<p>Во всех остальных местах и вход и выход - unicode.
+</p>
+<p>Переписываем клиента DummyClient, чтобы он возвращал unicode, а не str, 
+   называем его UnicodeDummyClient:
+</p>
+<pre><code>class UnicodeDummyClient(DummyClient):
+    &quot;&quot;&quot;Dummy client for testing purposes with I/O data in unicode&quot;&quot;&quot;
+    def getClient(self, agreem_num):
+        assert isinstance(agreem_num, unicode)
+        res = u'Dummy_%s' % agreem_num
+        if len(res) &gt; 20:
+            res = res[:20]
+        # для имитации задержки выборки данных
+        time.sleep(self.pause_time)
+
+        return res
+
+</code></pre><p>аналогичным образом изменяем и AsyncPythyProto:
+</p>
+<pre><code>class AsyncUnicodePythyProto(AsyncPythyProto):
+    &quot;&quot;&quot;
+    Simple text demo protocol with async method for fetching data
+    and internal data in unicode 
+    &quot;&quot;&quot;
+
+    def lineReceived(self, line):
+        assert(line, str)
+        log.msg(&quot;data received from %s: `%s'&quot; % (str(self.transport.client), line))
+        if line == '':
+            self.sendLine(u&quot;Good bye&quot;)
+            self.transport.loseConnection()
+            return
+        # str -&gt; unicode
+        line = line.decode(self.factory.encoding)
+        agr = line[10:15]
+        deferred = threads.deferToThread(self.factory.clients.getClient, agr)
+        deferred.addCallback(self._cbGetClient)
+
+    def sendAnswer(self, client):
+        assert isinstance(client, unicode)
+        packet = u'\u0442\u0435\u0441\u0442%s' % client
+        self.sendLine(packet)
+
+    def sendLine(self, line):
+        assert isinstance(line, unicode)
+        line = line.replace('\r', '').replace('\n', '')
+        # unicode -&gt; str
+        line = line.encode(self.factory.encoding)
+        log.msg(&quot;data send: %s&quot; % line)
+        line = line + &quot;\r\n&quot;
+
+        self.transport.write(line)
+</code></pre><p>Вроде все. Код, по обычаю, - на <a href="http://rapidshare.de/files/27446116/twistedpythy_03.zip.html">RapidShare</a>.
+</p>
+<p>P.S. В следующий раз будем писать юнит-тесты.
+</p>
+{% endmark %}

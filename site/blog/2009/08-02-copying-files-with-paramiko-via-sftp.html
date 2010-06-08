@@ -1,0 +1,134 @@
+{% meta %}
+    tags: [tools, docs, sftp, ssh, paramiko]
+    title: Копирование файлов (paramiko и sftp)
+{% endmeta %}
+
+{% mark body %}
+<p>Зачастую возникает задача копирования файлов между хостами. Если вы пишите
+шелл-скрипт, то чаще всего эта задача решается при помощи <code>sftp</code> либо <code>rsync</code>.
+Для rsync я не встречал хорошего Python-инструмента, а вот для
+<a href="http://en.wikipedia.org/wiki/SSH_file_transfer_protocol">sftp</a> (и ssh)
+есть отличная библиотека <a href="http://www.lag.net/paramiko/">paramiko</a>. О ней и
+пойдет сегодня речь.</p>
+<!--more-->
+
+<p>ssh -- это хорошо спроектированный многоуровневый инструмент, поэтому для
+эффективной работы не плохо бы представлять, хотя бы в общих чертах, как он
+работает. Про что я буду рассказывать: как скопировать файлы с удаленной
+машины. Порядок действий примерно таков:</p>
+
+<ol>
+<li><p><strong>Проверить, что хост, к которому мы подключаемся тот, за который себя 
+выдает.</strong> Дело в том, что при первом соединении по ssh, ssh-клиент показывает
+вам отпечаток (fingerprint) открытого ключа сервера. По-хорошему, вы должны
+по другому каналу связи выяснить у администратора, действительно ли такой
+отпечаток у удаленного хоста. В дальнейшем, ssh при каждом коннекте
+запрашивает ключ удаленной стороны и <em>сравнивает с уже сохраненным</em>. Обычно
+список сохраненных открытых ключей хранится в <code>~/.ssh/known_hosts</code>.</p></li>
+<li><p><strong>Осуществить аутентификацию по ключу.</strong> ssh подерживает различные
+методы аутентификации. Нас интересует
+<a href="http://www.openbsd.ru/docs/ssh.html">аутентификация по ключу</a>. Т.е. создается
+пара ключей: открытый и закрытый -- открытый ключ помещается на удаленную
+сторону, закрытый -- хранится на на нашей стороне (обычно -- в <code>~/.ssh/id_dsa</code>
+
+или <code>~/.ssh/id_rsa</code>, в зависимости от типа ключа -- RSA или DSA). В
+дальнейшем, при соединении ssh не спрашивает пароль аккаунта на удаленной
+стороне, а проверяет наличие на удаленной стороне <em>открытого ключа,
+комплементарного локальному закрытому</em>. Если закрытый ключ
+запаролен -- он будет спрашивать <em>пароль закрытого ключа</em>. Но для наших целей
+хватит и безпарольного ключа ;-)</p></li>
+<li><p>Далее, установить канал связи и скопировать с удаленного хоста определенные
+файлы.</p></li>
+</ol>
+
+<p>Поехали.</p>
+
+<h3>Ключ хоста</h3>
+
+<p>Итак, нам нужно раздобыть список сохраненных ключей и найти
+нужный нам ключ по имени хоста:</p>
+
+<pre><code>import os
+import paramiko
+
+def get_host_key(host):
+    hostkeytype = None
+    hostkey = None
+    # try to load host key from known hosts
+    try:
+        host_keys = paramiko.util.load_host_keys(
+            os.path.expanduser("~/.ssh/known_hosts"))
+    except IOError:
+        host_keys = {}
+    if host in host_keys:
+        hostkeytype = host_keys[host].keys()[0]
+        hostkey = host_keys[host][hostkeytype]
+    return hostkeytype, hostkey
+</code></pre>
+
+<p>Здесь мы используем <code>os.path.expanduser</code> для того, чтобы <code>~</code> "развернуть"
+в домашний каталог текущего пользователя. Далее, при помощи
+<code>paramiko.util.load_host_keys</code> парсим этот файл, и если находим нужный нам
+хост, узнаем тип его ключа (RSA или DSA) и собственно сам ключ.</p>
+
+<h3>Закрытый ключ пользователя</h3>
+
+<p>Вторым пунктом стоит аутентификация по ключу. Если нам не указали где искать
+ключ, мы должны посмотреть в обычном месте (<code>~/.ssh/id_rsa</code> и <code>~/.ssh/id_dsa</code>)
+и загрузить ключ:</p>
+
+<pre><code>def get_private_key(keyfile=None):
+    key = None
+    keytype = None
+    if keyfile is None:
+        keyfiles = [os.path.expanduser('~/.ssh/id_%s' % keytype)
+                    for keytype in ('dsa', 'rsa')]
+    else:
+        keyfiles = [keyfile,]
+    for kf in keyfiles:
+        try:
+            key = paramiko.RSAKey.from_private_key_file(kf)
+            keytype = 'ssh-rsa'
+        except (IOError, paramiko.SSHException), e:
+            try:
+                key = paramiko.DSSKey.from_private_key_file(kf)
+                keytype = 'ssh-dsa'
+            except (IOError, paramiko.SSHException), e:
+                pass
+    if key is None:
+        raise paramiko.SSHException('No rsa or dsa keys are available')        
+return keytype, key
+</code></pre>
+
+<p>Здесь единственный нюанс -- paramiko для RSA и DSA ключей использует отдельные
+классы, а спрашивать о типе ключа пользователя нам не хочется, так что мы пытаемся
+вначале загрузить ключ как RSA, если не удается -- как DSA, ну а если и
+так не получается, то тогда всё же вызывать исключение.</p>
+
+<h3>Копируем файлы</h3>
+
+<p>Теперь собираем всё вместе и копируем файлы с удаленной стороны:</p>
+
+<pre><code>def get_remote_file(user, host, path, pkeyfile=None):
+    hostkeytype, hostkey = get_host_key(host)
+    userkeytype, userkey = get_private_key(pkeyfile)
+    t = paramiko.Transport((host, 22))
+    t.connect(hostkey=hostkey, username=user, pkey=userkey)
+    sftp = paramiko.SFTPClient.from_transport(t)
+    sftp.get(path, os.path.basename(path))
+    # вместо sftp.get можно использовать sftp.open,
+    # и дальше как с обычным файлом, но только не забудьте
+    # закрыть транспорт...
+    t.close()
+</code></pre>
+
+<p>Полный пример, как обычно, <a href="http://hg.pyobject.ru/sandbox/file/tip/sftp/">на hg.pyo</a></p>
+
+<p>Это малая часть того, что умеет Paramiko. Надеюсь, я привлек ваше внимание к
+этой отличной библиотеке и вы запишите <a href="http://www.lag.net/paramiko/">http://www.lag.net/paramiko/</a> в свои
+закладки, или зафолловите <a href="http://github.com/robey/paramiko">robey/paramiko</a>
+на github ;-)</p>
+
+<p>P.S. Еще есть <a href="http://code.activestate.com/recipes/576810/">рецепт 576810</a>,
+чем то похожий на мой пример, но мне он не нравится, ни стилем, ни кодом.</p>
+{% endmark %}

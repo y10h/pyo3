@@ -1,0 +1,451 @@
+{% meta %}
+    tags: [nevow, docs]
+    title: Введение в Nevow
+{% endmeta %}
+
+{% mark body %}
+<p>Начал писать про Nevow <a href="http://www.pyobject.ru/blog/post/the-webframeworks-roundup-django-the-calibration-point/">в контексте выбора фреймворка</a>, да вышло так, что слишком много нужно пояснять, так что вначале небольшое введение в Nevow.
+</p>
+
+<!--more-->
+
+<h2>Сводка</h2>
+<p>Краткая сводка о Nevow:
+</p>
+<ul>
+<li>
+     Самоопределение: a web application construction kit
+ </li>
+ <li>
+     Сайт: <a href="http://divmod.org/trac/wiki/DivmodNevow">http://divmod.org/trac/wiki/DivmodNevow</a>
+ </li>
+ <li>
+     Лицензия: BSD
+ </li>
+ <li>
+     Текущая версия: 0.9.0
+ </li>
+ <li>
+     Используемая мной версия: 0.9.16 (svn)
+ </li>
+ <li>
+     Установка: distutils
+ </li>
+ <li>
+     Зависимости: <a href="http://twistedmatrix.com">twisted</a>
+ </li>
+ <li>
+     ORM/DB: отсутствует, рекомендуется <a href="http://divmod.org/trac/wiki/DivmodAxiom">axiom</a>
+ </li>
+ <li>
+     Шаблоны: собственные, основанные на XML
+ </li>
+ <li>
+     Обработка форм: собственная (formless), рекомендуется <a href="http://forms-project.pollenation.net/">formal</a>
+ </li>
+ <li>
+     Роутинг: обход объектов (object traversal)
+ </li>
+ <li>
+     Пакетирование приложения: не предусмотрено
+ </li>
+ <li>
+     Методы развертывания: twisted, WSGI (не без ошибок см. <a href="http://divmod.org/trac/ticket/1743">#1743</a>)
+ </li>
+</ul>
+
+<h2>Общая структура приложения</h2>
+<p>Ключевой объект приложения - наследник <code>nevow.rend.Page</code>, атрибут <code>docFactory</code> которого определяет способ &quot;загрузки шаблона&quot;. Я намеренно ограничиваюсь загрузчиками <code>nevow.loaders.xmlfile</code> и <code>nevow.loaders.xmlstr</code>, из названий понятно, что первый подгружает xml-шаблон из файла, второй - из строки.
+
+</p>
+<p>Так что элементарное приложение, которое будет просто отображать шаблон:
+</p>
+<pre><code>from nevow import rend, loaders
+template =&quot;&quot;&quot;
+&lt;html xmlns:nevow=&quot;http://nevow.com/ns/nevow/0.1&quot;&gt;
+Hello, world!
+&lt;/html&gt;
+&quot;&quot;&quot;
+
+class HelloWorld(rend.Page):
+    addSlash = True
+    docFactory = loaders.xmlstr(template)
+</code></pre><p>Как же теперь его запустить? Если код находится в <code>helloworld.py</code>, то пишем такой <code>helloworld.tac</code>:
+
+</p>
+<pre><code>from nevow import appserver
+from twisted.application import service, strports
+import helloworld
+
+site = appserver.NevowSite(helloworld.HelloWorld())
+application = service.Application('NevowHelloWorld')
+httpd = strports.service(&quot;tcp:8000&quot;, site)
+httpd.setServiceParent(application)
+</code></pre><p>И вот этот файл &quot;скармливаем&quot; Twisted: <code>twistd -ny helloworld.tac</code> и открываем в браузере <a href="http://localhost:8000">localhost:8000</a>.
+</p>
+
+<h2>Роутинг - обход объектов</h2>
+
+<p>Теперь встает вопрос о том, как в Nevow назначаются URL'ам те или иные объекты. Назначаются они по свойствам объекта:
+</p>
+<ul>
+ <li>
+     наличию атрибута или метода <code>child_something</code>, где <code>something</code> - &quot;дочерний URL&quot;
+ </li>
+
+ <li>
+     словарю <code>children</code>
+ </li>
+
+ <li>
+     методам <code>locateChild</code> или <code>childFactory</code>
+
+ </li>
+</ul>
+<p>Наиболее простой способ - это, конечно, первый. Допустим, у нас есть потомки <code>nevow.rend.Page</code> с именами <code>OnePage</code>, <code>TwoPage</code> и <code>ThreePage</code>, и теперь мы хотим поставить им в соответствие URL'ы <code>/one/</code>, <code>/two/</code> и <code>/three/</code> соответственно. С <code>child_*</code> это делается так:
+
+</p>
+<pre><code>class Root(rend.Page):
+    addSlash = True     # необходим для того, чтобы /one и /one/ имели одинаковый смысл
+    docFactory = loaders.xmlstr(template_root)   # точно так же как и в HelloWorld
+    child_one = OnePage()   # можно повторить код HelloWorld, но с другим шаблоном
+    child_two = TwoPage()
+    child_three = ThreePage()
+</code></pre><p>Второй способ не принципиально отличается от первого, так что я приводить его не буду, а желающие могут посмотреть код <a href="http://pythy.googlecode.com/svn/trunk/nevow-intro/01_object-traversal/">отдельно</a>.
+</p>
+<p><code>locateChild</code> и <code>childFactory</code> являются более низкоуровневыми вещами, но позволяют выстраивать и более &quot;хитрые&quot; схемы. Причем, <code>childFactory</code> есть упрощенный <code>locateChild</code>. Чтобы лучше понять, объясню как Nevow определяет кому обрабатывать текущий URL. 
+
+</p>
+<p>При обращении по определенному URL, Nevow передает его в виде кортежа сегментов обработчику <code>locateChild</code>. Например, URL <code>/foo/bar</code> трансформируется в сегменты <code>('foo', 'bar')</code>, &quot;корневой&quot; URL <code>/</code> - в сегмент <code>('', )</code>, <code>/foo/bar/baz/</code> - в <code>('foo', 'bar', 'baz', '')</code>. Обработчик обрабатывает URL как ему положено, и возвращает результат и необработанные сегменты. Чтобы упростить эту процедуру, используют <code>childFactory</code>, которой передается только текущий сегмент, и, соответственно, <code>childFactory</code> возвращает только результат, необработанные сегменты возвращать не нужно. Так вот, <code>locateChild</code> по умолчанию настроен на обработку <code>child_*</code>, <code>children</code> и <code>childFactory</code>, так что если вы переопределяете этот самый низкоуровневый обработчик, то не удивляйтесь, что более высокоуровневые перестали работать ;-)
+
+</p>
+<p>Пример с <code>childFactory</code> выглядит так:
+</p>
+<pre><code>class Root(rend.Page):
+    addSlash = True
+    docFactory = loaders.xmlstr(template_root)
+
+    def childFactory(self, context, name):
+        choices = {
+            'one': PageOne(),
+            'two': PageTwo(),
+            'three': PageThree(),
+        }
+    return choices.get(name)
+</code></pre><p>Пример фактически повторяет действие словаря <code>children</code>, точнее его &quot;машинерию&quot;. Ну и если <code>childFactory</code> возвращает <code>None</code>, то полагается, что данному URL'у не может быть сопоставлен ни один объект и это означает ошибку <code>404 Not found</code>. Кстати, в этом месте появляется вездесущий (в Nevow он встречается сплошь и рядом) контекст.
+
+</p>
+<p>Стоит отметить, что совсем не обязательно, чтобы &quot;дети&quot; были определены внутри класса, их вполне можно добавлять динамически и к представителю класса.
+</p>
+
+<h2>Шаблоны</h2>
+<p>Шаблоны Nevow представляют собой XML-файл, в котором пространство имен <code>http://nevow.com/ns/nevow/0.1</code> указывает обработчику на управляющие конструкции. Пространство имен должно указываться в начальном теге шаблона так:
+</p>
+<pre><code>&lt;html xmlns:nevow=&quot;http://nevow.com/ns/nevow/0.1&quot;&gt;
+
+...
+&lt;/html&gt;
+</code></pre><p>В этом случае управляющие теги/атрибуты будут иметь вид <code>nevow:tag</code>. Если указать пространство имен таким образом (иногда так сокращают):
+</p>
+<pre><code>&lt;html xmlns:n=&quot;http://nevow.com/ns/nevow/0.1&quot;&gt;
+...
+&lt;/html&gt;
+</code></pre><p>то управляющие теги/атрибуты будут иметь вид <code>n:tag</code>. Однако на мой взгляд это тот случай, когда простота хуже воровства - такое сокращение резко снижает читабельность шаблона.
+</p>
+
+<p>Язык шаблонов Nevow относится к TAL (template attribute language), т.е. управляющие конструкции представляют собой атрибуты обычных XHTML-тегов. В Nevow определены два атрибута, которые вызывают Python-код:
+</p>
+<ul>
+ <li>
+     <code>nevow:pattern</code> - помечает данный тег и дает имя образцу
+ </li>
+
+ <li>
+     <code>nevow:render</code> - вызывает соответствующий метод (render_name) объекта и <em>заменяет</em> узел шаблона результатом
+ </li>
+
+ <li>
+     <code>nevow:data</code>- вызывает соответствующий метод (data_name) объекта и <em>устанавливает</em> спец-данные для узла шаблона
+ </li>
+</ul>
+<blockquote><p>Существует ряд встроенных &quot;отрисовщиков&quot; (renderers):<ul>
+    <li><code>data</code> - отрисовывает данные как есть и вставляет в текущий узел</li>
+    <li><code>string</code> - отрисовывает данные как строку и вставляет в текущий узел</li>
+    <li><code>sequence</code> - делает итерации текущих данных, копируя образец (pattern) <code>item</code> для каждого элемента. Также использует образцы <code>header</code>, <code>divider</code>, <code>footer</code> и <code>empty</code>.</li>
+    <li><code>mapping</code> - вызывает <code>.items()</code> у текущих данных и заполняет слоты-ключи значениями</li></ul>
+
+</p>
+</blockquote><p>Nevow не является &quot;чистым TAL&quot;, так что в нем определены и несколько тегов: 
+</p>
+<ul>
+ <li>
+     <code>nevow:slot</code> - определяет слот, который необходимо &quot;заполнить&quot;
+ </li>
+
+ <li>
+     <code>nevow:attr</code> - указывает, что данным узлом устанавливается атрибут родительского узла
+ </li>
+
+ <li>
+     <code>nevow:invisible</code> - &quot;невидимый&quot; тег (в конечный результат он не попадает, однако все конструкции, определенные в нем выполняются наравне с обычными).
+ </li>
+
+</ul>
+<p>Что ж, лексические конструкции известны, давайте смотреть, что с ними можно сделать. Рассмотрим типичные use-cases:
+</p>
+
+<h3>Вставка данных</h3>
+<p>Необходимо вставить некие данные в шаблон. Для этого воспользуемся встроенными &quot;отрисовщиками&quot; <code>data</code> или <code>string</code>, либо тегом <code>nevow:slot</code>:
+</p>
+
+<pre><code>from nevow import rend, loaders
+
+from datetime import datetime
+from nevow._version import version as nevow_version
+from twisted._version import version as twisted_version
+
+template =&quot;&quot;&quot;
+&lt;html xmlns:nevow=&quot;http://nevow.com/ns/nevow/0.1&quot;&gt;
+&lt;p&gt;Hello, &lt;em nevow:data=&quot;name&quot; nevow:render=&quot;data&quot;&gt;Dude&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;Current time is: &lt;em nevow:data=&quot;time&quot; nevow:render=&quot;string&quot;&gt;2006-12-10 14:49:52&lt;/em&gt;&lt;/p&gt;
+
+&lt;p nevow:render=&quot;fillSlots&quot;&gt;
+This page running by Twisted &lt;nevow:slot name=&quot;twisted&quot; /&gt; and Nevow &lt;nevow:slot name=&quot;nevow&quot; /&gt;
+
+&lt;/p&gt;
+&lt;/html&gt;
+&quot;&quot;&quot;
+
+class Root(rend.Page):
+    addSlash = True
+    docFactory = loaders.xmlstr(template)
+
+    data_name=&quot;Nevow newbie&quot;
+
+    def data_time(self, context, data):
+        return datetime.now()
+
+    def render_fillSlots(self, context, data):
+        context.tag.fillSlots('twisted', twisted_version.short())
+        context.tag.fillSlots('nevow', nevow_version.short())
+        return context.tag
+</code></pre><p>Как видно, данные для шаблона - это либо атрибут объекта, либо метод (с сигнатурой <code>(self, context, data)</code>). Что касается <code>nevow:slot</code>, то  его есть смысле применять там, где происходит простая подстановка данных, однако в этом случае все слоты нужно &quot;оборачивать&quot; отдельным &quot;отрисовщиком&quot;.
+
+</p>
+
+<h3>Условные переходы</h3>
+<p>Нужно в зависимости от некоего условия выводить те или иные данные. Единственного решения нет, все зависит от ситуации. Предлагаемые решения:
+</p>
+<ul>
+ <li><p>в случае простых значений - условие переносится в <code>data_</code>-метод
+</p>
+
+ </li>
+
+ <li><p>в случае комплексных (т.е. когда выводимый результат состоит из более чем одного тега) - использование образцов (pattern)
+
+</p></li></ul>
+<pre><code>from nevow import rend, loaders, inevow
+   
+template =&quot;&quot;&quot;
+&lt;html xmlns:nevow=&quot;http://nevow.com/ns/nevow/0.1&quot;&gt;
+&lt;p&gt;Hello, &lt;em nevow:data=&quot;name&quot; nevow:render=&quot;data&quot;&gt;Dude&lt;/em&gt;&lt;/p&gt;
+
+    &lt;div id=&quot;definition&quot; nevow:render=&quot;definition&quot;&gt;
+       &lt;p nevow:pattern=&quot;twisted_definition&quot;&gt;&lt;strong&gt;Twisted&lt;/strong&gt;
+       is an event-driven networking framework written in Python&lt;/p&gt;
+
+       
+       &lt;p nevow:pattern=&quot;nevow_definition&quot;&gt;&lt;strong&gt;Nevow&lt;/strong&gt;
+       is a web application construction kit written in Python.&lt;/p&gt;
+   &lt;/div&gt;
+&lt;/html&gt;
+&quot;&quot;&quot;
+
+class Root(rend.Page):
+    addSlash = True
+    docFactory = loaders.xmlstr(template)
+    counter = 1
+
+    def data_name(self, context, data):
+        self.counter += 1
+        if divmod(self.counter, 2)[1] == 0:
+            return &quot;Nevow newbie&quot;
+        else:
+            return &quot;Twisted hacker&quot;
+
+    def render_definition(self, context, data):
+        query = inevow.IQ(context)
+        twisted_pattern = query.onePattern('twisted_definition')
+        nevow_pattern = query.onePattern('nevow_definition')
+
+        if divmod(self.counter, 2)[1] == 0:
+            return context.tag[nevow_pattern]
+        else:
+            return twisted_pattern
+</code></pre>
+<p>В данном коде применены обе практики - простое условие в <code>data_name</code> и использование шаблонов в <code>render_definition</code>. Если с первым более-менее понятно, то насчет второго стоит чуть пояснить. 
+
+</p>
+<p>Если вы вставляете атрибут <code>nevow:pattern</code> в тег, то без дополнительных &quot;манипуляций&quot; данные <em>не будут отображаться</em> в конечном результате. Т.е. если убрать тег <code>&lt;div nevow:render=&quot;definition&quot;&gt;..&lt;/div&gt;</code>, то текст про Nevow и Twisted не будет отображен. Поэтому, мы и добавили отрисовщик <code>definition</code> для того, чтобы выбрать, какой образец будет показан. Теперь пару слов об отрисовщике. Результат отрисовщика <em>переписывает тег полностью</em>. Т.е. если отрисовщик бы вернул текст <code>&quot;haba haba&quot;</code>, то <em>вместо</em> тега <code>&lt;div&gt;..&lt;/div&gt;</code> стоял бы данный текст. Если же есть желание, чтобы данный текст появился <em>внутри</em> тега, то нужно возвращать <code>context.tag[&quot;haba haba&quot;]</code>. Для избежания путаницы стоит придерживаться одного из этих вариантов. Например, я всегда отрисовываю данные только внутри тега, а если место, где нужно отрисовать что-либо не совпадает с каким-либо XHTML-тегом, то использую Nevow-тег <code>nevow:invisible</code>. В примере специально в одном случае выводится с <code>context.tag</code>, а в другом - без, чтобы вы смогли оценить влияние. Что же касается образцов, то тут методика такова: при помощи интерфейса <code>nevow.inevow.IQ</code> объект контекста <em>приводится</em> к объекту запроса (query). Из запроса, при помощи <code>onePattern</code> мы и получаем искомый образец. И затем, в зависимости от ситуации, выводим тот или иной образец.
+
+</p>
+
+<h3>Циклы</h3>
+<p>Зачастую требуется выводить некий список данных. На этот случай в Nevow есть стандартный отрисовщик <code>sequence</code>. Он обладает достаточно широкими возможностями и сейчас мы их продемонстрируем:
+</p>
+<pre><code>from nevow import rend, loaders
+
+template =&quot;&quot;&quot;
+&lt;html xmlns:nevow=&quot;http://nevow.com/ns/nevow/0.1&quot;&gt;
+&lt;ul nevow:data=&quot;fruits&quot; nevow:render=&quot;sequence&quot;&gt;
+
+&lt;p nevow:pattern=&quot;empty&quot;&gt;There is no fruits&lt;/p&gt;
+&lt;p nevow:pattern=&quot;header&quot;&gt;There is some fruits:&lt;/p&gt;
+&lt;li nevow:pattern=&quot;item&quot; nevow:render=&quot;data&quot; class=&quot;odd&quot;&gt;Some fruit here&lt;/li&gt;
+
+&lt;li nevow:pattern=&quot;item&quot; nevow:render=&quot;data&quot; class=&quot;even&quot;&gt;Another fruit here&lt;/li&gt;
+&lt;p nevow:pattern=&quot;footer&quot;&gt;...and nothing more&lt;/p&gt;
+&lt;/ul&gt;
+
+&lt;/html&gt;
+&quot;&quot;&quot;
+
+class Root(rend.Page):
+    addSlash = True
+    docFactory = loaders.xmlstr(template)
+
+    counter = 1
+
+    def data_fruits(self, context, data):
+        self.counter += 1
+        if divmod(self.counter, 2)[1] == 0:
+            return ('apple', 'orange', 'pear', 'apricot')
+        else:
+            return ()
+</code></pre><p>Иными словами, образцы <code>header</code> и <code>footer</code> подставляются в начало и конец <em>в любом случае</em>, образец <code>empty</code> отрисовывается если передана пустая последовательность, <code>item</code> - на каждом элементе последовательности, причем данные для узла уже заполнены (т.е. <code>nevow:data</code> не нужен). Поскольку в нашем случае указано два образца <code>item</code>, то они заполняются попеременно, так что можно, например, чередовать цвета строк для лучшей читабельности.
+
+</p>
+
+<h3>Фрагменты шаблонов</h3>
+<p>Зачастую есть смысл выносить общий дизайн в один шаблон, а на различных страницах лишь &quot;рисовать&quot; неповторяющиеся элементы. В Django templates это делает <code>{{ '{%' }} block somename {{ '%}' }}</code>, в Nevow, как и для много другого, нет специальной конструкции, и нет одного способа решения. Таких способа два:
+</p>
+<ul>
+ <li>
+     использование <code>nevow:slot</code>
+
+ </li>
+
+ <li>
+     использование отрисовщика
+ </li>
+</ul>
+<p>На самом деле эти способы отличаются самую малость - способом подстановки фрагментов в основной шаблон, а в целом идеология остается неизменной. 
+</p>
+<pre><code>from nevow import rend, loaders
+
+main_template =&quot;&quot;&quot;
+&lt;html xmlns:nevow=&quot;http://nevow.com/ns/nevow/0.1&quot;&gt;
+&lt;p nevow:render=&quot;fillAllSlots&quot;&gt;
+
+Some text before first (inserted by nevow:slot tag) fragment. 
+&lt;em&gt;&lt;nevow:slot name=&quot;content_fragment&quot; /&gt;&lt;/em&gt;
+Some text after first fragment.
+&lt;/p&gt;
+&lt;p&gt;
+Some text before second (inserted by nevow:render attribute) fragment.
+&lt;em nevow:render=&quot;fragment&quot; /&gt;
+
+Some text after second fragment.
+&lt;/p&gt;
+&lt;/html&gt;
+&quot;&quot;&quot;
+
+fragment_template=&quot;&quot;&quot;
+&lt;p xmlns:nevow=&quot;http://nevow.com/ns/nevow/0.1&quot;&gt;
+Fragment may use own data and renderers, for example this is the counter: 
+&lt;strong nevow:data=&quot;counter&quot; nevow:render=&quot;data&quot;&gt;counter here&lt;/strong&gt;
+
+&lt;/p&gt;
+&quot;&quot;&quot;
+
+class Fragment(rend.Fragment):
+    docFactory = loaders.xmlstr(fragment_template)
+
+    def __init__(self, counter_step=1):
+      self.counter = 0
+      self.counter_step = counter_step
+      super(Fragment, self).__init__()
+
+   def data_counter(self, context, data):
+        self.counter += self.counter_step
+        return &quot;%.2f&quot; % self.counter
+
+class Root(rend.Page):
+    addSlash = True
+    docFactory = loaders.xmlstr(main_template)
+    fragment_one = Fragment(0.346)
+    fragment_two = Fragment(0.724)
+
+    def render_fillAllSlots(self, context, data):
+        context.tag.fillSlots('content_fragment', self.fragment_one)
+        return context.tag
+
+    def render_fragment(self, context, data):
+        return context.tag[self.fragment_two]
+</code></pre><p>Думаю, код говорит сам за себя.
+</p>
+
+<h2>Формы</h2>
+<p>У Nevow есть <a href="http://divmod.org/trac/wiki/DivmodNevow/FormHandling">два инструмента обработки форм</a>: стандартный <code>formless</code> и не идущий в поставке, но рекомендуемый <code>formal</code> (ранее называвшийся <a href="http://forms-project.pollenation.net/">forms</a>). Я не буду приводить пример <code>formless</code>, а сразу перейду к <code>formal</code>.
+
+</p>
+<p>Как <code>formless</code>, так и <code>formal</code> подразумевают, что форма не только обрабатывается и валидируется, но и генерируется автоматически.
+</p>
+<p>Что ж, давайте попробуем что-нибудь с <code>formal</code>:
+</p>
+<pre><code>from nevow import rend, loaders, inevow
+import formal
+
+template =&quot;&quot;&quot;
+&lt;html xmlns:nevow=&quot;http://nevow.com/ns/nevow/0.1&quot;&gt;
+
+&lt;link rel=&quot;stylesheet&quot; type=&quot;text/css&quot; href=&quot;formalcss&quot; /&gt;
+&lt;p nevow:render=&quot;form simple&quot; /&gt;
+&lt;/html&gt;
+
+&quot;&quot;&quot;
+
+class Root(formal.ResourceMixin, rend.Page):
+    addSlash = True
+    docFactory = loaders.xmlstr(template)
+
+    child_formalcss = formal.defaultCSS
+
+    counter = 0
+
+    def form_simple(self, context):
+        self.counter += 1
+        form = formal.Form()
+        form.addField(&quot;number&quot;, formal.Integer(required=True))
+        form.addField(&quot;name&quot;, formal.String(missing=&quot;absence&quot;))
+        form.addField(&quot;id&quot;, formal.Integer(immutable=True))
+        form.addAction(self.action)
+        form.data = {'id': self.counter}
+        return form
+
+    def action(self, context, form, data):
+        return &quot;You've entered %r&quot; % data
+</code></pre><p>Как видно, необходимо наследоваться от <code>formal.ResourceMixin</code> и добавить спец-метод <code>form_name</code>, где  <code>name</code> - имя формы (в нашем случае - <code>simple</code>). Этот метод должен вернуть объект формы. В <code>formal</code> определены некоторые типы данных (<code>Integer</code>, <code>String</code>, <code>Boolean</code> и т.д.). Конструктору типа передаются параметры, смысл которых вполне очевиден: <code>required</code> - поле необходимо для заполнения; <code>missing</code> - значение, передаваемое обработчику формы в случае, если поле не заполнено; <code>immutable</code> - поле не активно, не доступно для редактирования. Начальные значения полей формы можно задавать при помощи атрибуты <code>data</code> формы, в виде словаря.
+
+</p>
+<p>В целом, схема приемлема, однако я не нашел ни одного примера (а документация по <code>formal</code> отсутствует как класс) как сделать, чтобы данные формы выводились на этой же странице <em>без редиректа</em> и промежуточных хранилищ. Все примеры в обработчике либо просто писали в лог введенные данные, либо сохраняли введенные данные в какое-либо хранилище, а после делали редирект на страницу &quot;все ок, данные записаны&quot;. Еще один момент, который остался для меня непонятным - как делать GET-формы? Понятное дело, я могу сделать их &quot;руками&quot;, но как их валидировать? тоже &quot;руками&quot;? Эти вопросы остались для меня без ответов.
+</p>
+
+<h2>Заключение</h2>
+
+<p>Вышеописанного вполне хватит для того, чтобы написать несложное веб-приложение и оценить, подходит ли Nevow для вас. Я такое уже сделал. Об этом читайте в следующий раз.
+</p>
+<p>Код, как всегда, на <a href="http://pythy.googlecode.com/svn/trunk/nevow-intro/">code.google.com</a></p>
+{% endmark %}

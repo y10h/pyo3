@@ -1,0 +1,109 @@
+{% meta %}
+    tags: [paste, wsgi, docs]
+    title: PasteDeploy: введение для разработчиков
+{% endmeta %}
+
+{% mark body %}
+<p>Вторая статья про PasteDeploy, теперь уже для разработчика. Крайне рекомендую предварительно ознакомиться с <a href="http://www.pyobject.ru/blog/post/paste-deploy-101-for-users">первой статьей</a>.</p>
+
+<p>Итак, вы решили, что в вашем приложение неплохо бы использовать PasteDeploy. Это сделать очень просто, что я вам и продемонстрирую.</p>
+
+
+<!--more-->
+<h2>Теория</h2>
+
+<p>Сегодня мы рассмотрим способ, который не требует особой модификации уже написанного приложения и не привязывает новое приложение к PasteDeploy.</p>
+
+<p>Достигается это при помощи <a href="http://www.pyobject.ru/blog/post/understanding-eggs-entrypoints">системы плагинов eggs</a>. Для подключения PasteDeploy к приложению, вы определяете точку входа <code>paste.app_factory</code>. Фабрика, приоритетная для данного egg, должна иметь имя <code>main</code>. Фабрик может быть несколько. Фабрика -- это callable-объект со следующей сигнатурой: <code>factory(global_conf, **local_conf)</code>, т.е. глобальные настройки передаются словарем, а локальные -- как опциональные именованные параметры. При вызове этого объекта должно возвращаться WSGI-приложение.</p>
+
+<h2>Практика</h2>
+
+<p>Полагаю, что у вас есть некое WSGI-приложение, поведение которого задается параметрами конструктора, например так:</p>
+
+<pre><code>class DemoApp(object):
+    """
+    Demo WSGI app
+    """
+    def __init__(self, foo, bar, baz, author, description):
+        self.foo = foo
+        self.bar = bar
+        self.baz = baz
+        self.author = author
+        self.description = description
+
+    def __call__(self, environ, start_response):
+        start_response('200 Ok', [('Content-Type', 'text/plain')])
+        params = ['\t%s (%s): %r\n' % (p, type(getattr(self, p)).__name__, getattr(self, p)) 
+                  for p in ('foo', 'bar', 'baz')]
+        env = ['\t%s ==&gt; %s\n' % (i, environ[i]) for i in sorted(environ.keys())]
+        return [
+            ' ==== Demo app by %s ==== \n' % self.author,
+            ' .:[ %s ]:.\n' % self.description,
+            '\nHere the params:\n',
+        '-=-=-=-=-=-=-=-=-=-=-=-=-=-\n' ] + params + [
+            '\nHere the environ:\n',
+        '-=-=-=-=-=-=-=-=-=-=-=-=-=-\n'] + env
+</code></pre>
+
+<p>Приложение простое, показывает свои параметры (и типы значений этих параметров) и переменные окружения.</p>
+
+<p>Пишем для этого приложения фабрику:</p>
+
+<pre><code>def demo_app_factory(global_conf, **local_conf):
+    """
+    Example of PasteDeploy app factory using DemoApp as target WSGI application
+    """
+    conf = global_conf.copy()
+    conf.update(local_conf)
+    return DemoApp(
+        conf.get('foo') or '--absent--',
+        conf.get('bar') or '--absent--',
+        conf.get('baz'),
+        conf.get('author') or 'N/A',
+        conf.get('description') or '--absent--')
+</code></pre>
+
+<p>и указываем в setup.py пакета эту фабрику с именем <code>main</code> как точку входа <code>paste.app_factory</code>:</p>
+
+<pre><code>setup( ...
+   entry_points="""
+    # -*- Entry points: -*-
+
+    [paste.app_factory]
+    main = pastedeploysimplestexample:demo_app_factory
+  """,
+  ...)
+</code></pre>
+
+<p>Устанавливаем это яйцо, и пробуем такой конфиг:</p>
+
+<pre><code class="no-highlight">[DEFAULT]
+author = Yury Yurevich
+description = The first config for PasteDeploy-enabled app
+
+[app:main]
+use = egg:PasteDeploySimplestExample
+# однострочное значение
+param_foo = It works!
+# многострочное значение
+param_bar = Multiline is 
+    supported. Just 
+    indent it.
+# boolean значение, можно использовать 1/0, True/False, true/false
+param_baz = 1
+
+[server:main]
+use = egg:Paste#http
+host = 127.0.0.1
+port = 8080
+</code></pre>
+
+<p>Всё бы ничего, но опция baz по логике должна быть boolean, а в приложение передается строка. Можно, конечно, это сделать руками, но у PasteDeploy уже есть на это дело маленькие помощники:
+<code>paste.deploy.converters.asbool</code>, <code>paste.deploy.converters.asint</code>, <code>paste.deploy.converters.aslist</code>.</p>
+
+<p>Добавление <code>asbool</code> в фабрику оставлю читателям, а особо нетерпеливые могут посмотреть уже <a href="http://pythy.googlecode.com/svn/trunk/paste_deploy/PasteDeploySimplestExample/pastedeploysimplestexample/__init__.py">готовый код примера</a>.</p>
+
+<h2>Дополнительно</h2>
+
+<p>Не думаю, что вам понадобится писать собственные сервера на Python, тем не менее может пригодиться. Для серверов используется точка входа <code>paste.server_factory</code>, сигнатура такая же как и у фабрики для приложения. Callable-объект, соответствующий этой точке должен возвращать сервер в виде callable-объекта с сигнатурой <code>serve(wsgi_app)</code>. Пример можно посмотреть всё в том же <a href="http://pythy.googlecode.com/svn/trunk/paste_deploy/PasteDeploySimplestExample/">PasteDeploySimplestExample</a>.</p>
+{% endmark %}

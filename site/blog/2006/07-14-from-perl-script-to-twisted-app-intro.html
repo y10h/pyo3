@@ -1,0 +1,114 @@
+{% meta %}
+    tags: [perl, docs, twisted]
+    title: От Perl-скрипта к Twisted-приложению: Вступление
+{% endmeta %}
+
+{% mark body %}
+<p>Недавно у нас с товарищем такая ситуация возникла: ему понадобилось по
+   определенному (текстовому) протоколу получать/отсылать данные.</p>
+
+
+<!--more-->
+
+<p>Он не долго думая, написал на Perl quck&amp;dirty скрипт, взяв за <a href="http://www.linuxjournal.com/article/3237">пример &quot;форкающегося&quot;
+Perl-демона</a>. Что-то примерно такое:
+</p>
+<pre><code>#!/usr/bin/perl -w
+# serverfork.pl - a server that forks a child
+# process to handle client connections
+use strict;
+use IO::Socket;
+use Sys::Hostname;
+use POSIX qw(:sys_wait_h);
+use DBI;
+
+# perl's black magic for reaping childs by parent
+
+sub REAP {
+    1 until (-1 == waitpid(-1, WNOHANG));
+    $SIG{CHLD} = \&amp;REAP;
+}
+$SIG{CHLD} = \&amp;REAP;
+
+my $sock = new IO::Socket::INET(
+                  LocalHost =&gt; '0.0.0.0',
+                      LocalPort =&gt; 3000,
+                          Proto     =&gt; 'tcp',
+                          Listen    =&gt; SOMAXCONN,
+                          Reuse     =&gt; 1);
+$sock or die &quot;no socket :$!&quot;;
+STDOUT-&gt;autoflush(1);
+my($new_sock, $buf, $kid);
+my $fio;
+while ($new_sock = $sock-&gt;accept()) {
+    # execute a fork, if this is
+    # the parent, its work is done,
+    # go straight to continue
+    next if $kid = fork;
+    die &quot;fork: $!&quot; unless defined $kid;
+    # child now...
+    # close the server - not needed
+    close $sock;
+
+    while (defined($buf = &lt;$new_sock&gt;)) {
+    chop $buf;
+        # parsing packet....
+        $num = parse_packet($buf);
+        print &quot;trying to send answer...\n&quot;;
+        print defined($new_sock) ?  &quot;socket good\n&quot; : &quot;socket bad\n&quot;; 
+        if ($fio = get_client($sess{num})){
+            print &quot;client:\t&quot;.$fio;
+            my $packet = make_packet($fio);
+            print $new_sock $packet.&quot;\r\n&quot;;
+       }
+    }
+    sleep(10);
+    exit;
+} continue {
+    # parent closes the client since
+    # it is not needed
+   close $new_sock;
+}
+
+sub parse_packet{
+    # dummy parser
+    my $buf = shift;
+    return substr($buf,10,5)
+}
+
+sub make_packet{
+    # dummy maker
+    my $fio = shift;
+    return &quot;dummypacketmaker0123456789&quot;.$fio
+}
+
+sub get_client{
+    my $num = shift;
+    # ... some actions with DB for fetching client's name by agreem's number
+    # f.e. it would be 'Nikanorov Ivan Nikifirovich'
+    $name = 'Nikanorov Ivan Nikifirovich';
+
+    my @a = split /\s+/, $name if $i==1;
+
+    return  ( $i==1 ? substr($a[0],0,16).(defined($a[1])? '_'.substr($a[1],0,1).( defined($a[2]) ? '_'.substr($a[2],0,1)
+                                             : '' )
+                        : ''
+                  )
+        : 0
+    );
+
+}
+
+</code></pre><p>И вот с этим Perl-демоном у него возникла проблема: после некоторого времени
+   работы один из &quot;детей&quot; съедал все ресурсы процессора. И товарищ попросил глянуть свежим
+   взглядом, может я увижу. Я посмотрел, и предложил: давай я тебе этот демон напишу
+   на Python, но при условии, что я смогу опубликовать &quot;процесс&quot;. Он согласился.
+</p>
+<p>Первоначально я задумывал переписать Perl-код 1-к-1, но потом вспомнил, что
+   не так давно смотрел <a href="http://twistedmatrix.com">twisted</a> и он мне тогда приглянулся. Напомню, что это
+   фреймворк для создания асинхронных приложений, преимущественно сетевых.
+</p>
+<p>В общем, взялся переписать на twisted python. Что было в процессе и
+   что в итоге получилось опишу чуть позже.
+</p>
+{% endmark %}

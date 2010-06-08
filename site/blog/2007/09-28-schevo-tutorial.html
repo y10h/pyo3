@@ -1,0 +1,315 @@
+{% meta %}
+    tags: [zodb, docs, durus, oodb, schevo]
+    title: Туториал по Schevo
+{% endmeta %}
+
+{% mark body %}
+<p>Давно собирался рассказать о <a href="http://www.schevo.org">Schevo</a>, да всё никак руки не доходили. Исправляюсь...
+</p>
+<p>Schevo (шево) - это реляционная надстройка над ООДБ (бэкенды - <a href="http://www.mems-exchange.org/software/durus/">Durus</a> и <a href="http://cheeseshop.python.org/pypi/ZODB3">ZODB</a>), разрабатываемая <a href="http://www.orbtech.com/">Orbtech</a>. Самоопределение Schevo таково (вольный перевод):
+</p>
+<blockquote><p>Schevo - это СУБД следующего поколения, основными достоинствами которой являются:
+   <ul><li> <strong>Быстрая разработка</strong>. Легко и просто создавайте даже достаточно сложные базы. Схема легко пишется, легко читается. Можно быстро указывать начальные данные прямо в схему; используя тот же синтаксис можно создать набор тестовых данных для разработчика.
+   </li><li> <strong>Богатое описание схемы</strong>. Описывайте схемы данных, используя лаконичный, легко читаемый Python-код. Схема описывает не только структуру БД, но и все нестандартные транзакции и правила непротиворечивости данных.
+   </li><li> <strong>Автоматическая эволюция схемы</strong>. Спокойно используйте Schevo для хранения часто изменяемых данных. При необходимости, изменяете схему и при помощи инструментов Schevo легко мигрируйте от одной версии схемы к другой.
+   </li><li> <strong>Транзакции</strong>. Schevo защищает ваши данные. Единственный способ изменить данные - это явные транзакции. Вы можете доверить Schevo свои данные, оин всегда будут в консистентном состоянии.
+   </li><li> <strong>Генерация UI</strong>. Код пользовательского интерфейса использует преимущества схемы. Используйте полнофункциональный навигатор по БД без необходимости писать какой-либо код (вне вашей схемы) вообще. Создавайте кастомизированный интерфейс при помощи специальных Schevo-виджетов и инструментов.
+   </ul>
+</p>
+</blockquote>
+
+<!--more-->
+<p>Я расскажу о Schevo в формате &quot;методички&quot; и постараюсь пройтись по всем бенефитам, перечисленным выше. Я наверняка пропущу какие-нибудь моменты, но цель сориентировать по технологии, а не написать справочник. Естественно, прежде чем приступать к изучению Schevo, следует его установить. Это легко сделать при помощи <code>easy_install Schevo</code>
+</p>
+
+<h2>Схема</h2>
+<p>Схема приложения должна находится в модуле <code>&lt;yourapp&gt;.schema.&lt;schema_name&gt;__&lt;schema_version&gt;</code>. Например, схема версии 1, для pyobject лежит в <code>pyobject.schema.pyobject_001</code>. Любая схема начинается с &quot;магических строк&quot;
+</p>
+<pre><code class="python">from schevo.schema import *
+schevo.schema.prep(locals())
+</code></pre><p>В Schevo есть специальная поддержка иконок для ваших объектов, я их не использовал, так что промолчу. 
+</p>
+<p>Запрещенные имена в схеме:
+</p>
+<ul>
+ <li>
+     Однобуквенные имена. Зарезервированы для пространств имен (namespaces)
+ </li>
+
+ <li>
+     Начинающиеся с подчеркивания. Зарезервированы для приватных методов Schevo
+ </li>
+
+ <li>
+     Имена вида буква_имя, например <code>t_something</code>. Зарезервировано за запросами (query), транзакциями (transaction), видами (view) и методами-расширениями (extender).
+ </li>
+
+ <li>
+     <code>classmethod</code>, <code>extentmethod</code>, <code>db</code>, <code>schevo</code>, <code>sys</code>. Зарезервированные имена.
+ </li>
+</ul>
+
+<h3>Схема</h3>
+<p>В Schevo используются мнемонические однобуквенные пространства имен (namespaces) для различных целей. В описании схемы у меня будут использоваться:
+</p>
+<ul>
+ <li>
+     <code>E</code>: Entity. Пространство сущностей.
+ </li>
+
+ <li>
+     <code>F</code>: Field. Пространство типов полей.
+ </li>
+
+ <li>
+     <code>f</code>: Field definition. Пространство конструкторов полей.
+ </li>
+</ul>
+<p>К примеру, сущность &quot;Статья в блоге&quot; я описал так:
+</p>
+<pre><code class="python">class Post(E.Entity):
+    &quot;&quot;&quot;Blog post entity&quot;&quot;&quot;
+    title = f.unicode()
+    slug = f.string()
+    abstract = f.memo()
+    body = f.memo(allow_empty=True, required=False)
+    created_at = f.datetime()
+
+    _index(created_at)
+    _key(slug)
+</code></pre><p>С типами полей, думаю, всё понятно. <code>_index</code>, это индекс (дает возможность по этому полю делать быструю сортировку), <code>_key</code> - это ключевой атрибут сущности. В данном случае это slug.
+</p>
+<p>Связь один-ко-многим реализуется типом поля <code>entity</code>. Поясню примером сущности &quot;Комментарий к статье в блоге&quot;:
+</p>
+<pre><code class="python">class Comment(E.Entity):
+    &quot;&quot;&quot;Comment on blog post entity&quot;&quot;&quot;
+    post = f.entity('Post', CASCADE)
+    author = f.unicode()
+    author_email = f.unicode()
+    author_site = f.unicode(required=False, allow_empty=True)
+    body = f.memo()
+    created_at = f.datetime()
+
+    _index(created_at)
+    _key(author, author_email, created_at, body)
+</code></pre><p>Поле <code>entity</code> позволяет связывать несколько типов сущностей.
+</p>
+<p>Отношение много-ко-многим, как и в традиционных РСУБД, реализуется промежуточной сущностью. Примером отношений много-ко-многим могут служить теги.
+</p>
+<pre><code class="python">class Tag(E.Entity):
+    &quot;&quot;&quot;Tag for blog post entity&quot;&quot;&quot;
+    name = f.unicode()
+    slug = f.string()
+
+    _key(name, slug)
+
+class PostTag(E.Entity):
+    &quot;&quot;&quot;Many-to-many relation between Post and Tag&quot;&quot;&quot;
+    tag = f.entity('Tag')
+    post = f.entity('Post')
+
+    _key(tag, post)
+</code></pre><p>Давайте попробуем чуть &quot;поиграться&quot; тем, что у нас есть. Для этого создадим приложение BlogTut:
+</p>
+<pre><code>$ paster create BlogTut -t schevo
+</code></pre><p>и в схему добавим вышеописанные сущности.
+</p>
+
+<h2>Работа с БД</h2>
+<p>Далее, необходимо создать БД для нашего приложения (имя приложения пишется в нижнем регистре)
+</p>
+<pre><code class="no-highlight">$ schevo db create --app=blogtut dev.db
+Schevo 3.1a1dev-r3564 :: Database Activities :: Create Database
+
+Creating new database at version 1.
+Packing the database...
+Database version is now at 1.
+Database created.
+</code></pre><p>Теперь можно запустить интерактивную сессию для работы с БД:
+</p>
+<blockquote><p>Если у вас стоит ipython, то именно он будет использоваться для этой сессии. Но у ipython есть проблемы с юникодом, поэтому будьте вдвойне внимательны. А я же, чтобы избежать проблем, буду использовать значения в латинице :)
+</p>
+</blockquote><p>Наша БД будет доступна в объекте <code>db</code>.
+</p>
+<pre><code class="no-highlight">$ schevo shell dev.db
+Schevo 3.1a1dev-r3564 :: Python Shell
+
+Opened database dev.db
+Python 2.4.4 (#2, Apr  5 2007, 20:11:18)
+Type &quot;copyright&quot;, &quot;credits&quot; or &quot;license&quot; for more information.
+
+IPython 0.7.2 -- An enhanced Interactive Python.
+?       -&gt; Introduction to IPython's features.
+%magic  -&gt; Information about IPython's 'magic' % functions.
+help    -&gt; Python's own help system.
+object? -&gt; Details about 'object'. ?object also works, ?? prints more.
+
+&gt;&gt;&gt; db
+&lt;&lt;&lt; &lt;Database u'Schevo Database' :: V 1&gt;
+</code></pre><p>Давайте создадим пост. Как уже выше сказано, все изменения в Schevo делаются через транзакции (которые находятся в пространстве имен <code>t</code>). 
+</p>
+<pre><code class="python">&gt;&gt;&gt; tx = db.Post.t.create()
+&gt;&gt;&gt; tx.title = u&quot;Hello world&quot;
+&gt;&gt;&gt; tx.slug = &quot;hello-world&quot;
+&gt;&gt;&gt; tx.abstract = u&quot;Just say hello to everyone!&quot;
+&gt;&gt;&gt; tx.created_at = datetime.datetime.now()
+&gt;&gt;&gt; post = db.execute(tx)
+&gt;&gt;&gt; post
+&lt;&lt;&lt; &lt;Post entity oid:1 rev:0&gt;
+</code></pre><p>Давайте аналогичным образом добавим и комментарий:
+</p>
+<pre><code class="python">&gt;&gt;&gt; tx = db.Comment.t.create()
+&gt;&gt;&gt; tx.author = u&quot;Pythy&quot;
+&gt;&gt;&gt; tx.author_email = u&quot;the.pythy@gmail.com&quot;
+&gt;&gt;&gt; tx.author_site = u&quot;http://www.pyobject.ru&quot;
+&gt;&gt;&gt; tx.created_at = datetime.datetime.now()
+&gt;&gt;&gt; tx.body = &quot;Just comment&quot;
+&gt;&gt;&gt; db.execute(tx)
+AttributeError: post value is required by Create :: Comment
+# упс, забыли про то, на какой же пост ссылается комментарий
+&gt;&gt;&gt; tx.post = post 
+&gt;&gt;&gt; db.execute(tx)
+&lt;&lt;&lt; &lt;Comment entity oid:1 rev:0&gt;
+</code></pre>
+<h2>Начальные (тестовые) данные</h2>
+<p>Понятно, что каждый раз для тестовых (или начальных) данных писать каждый раз руками вставку значений - утомительно, поэтому радуемся что их можно указать внутри схемы:
+</p>
+<pre><code class="python">E.Post._sample = [
+  (u&quot;Hello, World&quot;, &quot;hello-world&quot;, u&quot;Just say hello to everyone!&quot;, DEFAULT, &quot;2007-09-27 11:14&quot;),
+  (u&quot;Test&quot;, &quot;test&quot;, u&quot;Test, please ignore it&quot;, &quot;The body of test post&quot;, &quot;2007-09-28 17:36&quot;),
+]
+
+E.Comment._sample = [
+  ((&quot;hello-world&quot;, ), u&quot;Pythy&quot;, u&quot;the.pythy@gmail.com&quot;, u&quot;http://www.pyobject.ru&quot;, u&quot;Firstf**k&quot;, &quot;2007-09-27 12:42&quot;),
+  ((&quot;hello-world&quot;, ), u&quot;DummyCommenter&quot;, u&quot;the.pythy@gmail.com&quot;, DEFAULT, u&quot;+1&quot;, &quot;2007-09-28 00:15&quot;),
+  ((&quot;test&quot;, ), u&quot;DummyCommenter&quot;, u&quot;the.pythy@gmail.com&quot;, DEFAULT, u&quot;+1&quot;, &quot;2007-09-28 00:22&quot;),
+]
+
+E.Tag._sample = [
+  (u&quot;Hello&quot;, &quot;hello&quot;),
+  (u&quot;Test&quot;, &quot;test&quot;),
+]
+
+E.PostTag._sample = [
+  ((u&quot;Hello&quot;, &quot;hello&quot;), (&quot;hello-world&quot;, )),
+  ((u&quot;Test&quot;, &quot;test&quot;), (&quot;hello-world&quot;, )),
+  ((u&quot;Test&quot;, &quot;test&quot;), (&quot;test&quot;, )),
+]
+</code></pre><p>Мне кажется, что всё предельно прозрачно. Объекты, на которых необходимо сослаться (например, пост), определяются по ключевым атрибутам (для поста - слуг, для тега - пара имя-слуг).
+</p>
+<p>Получить заполненную базу можно так:
+</p>
+<pre><code class="no-highlight">$ schevo db create --delete --sample --app=tutblog dev.db
+Schevo 3.1a1dev-r3564 :: Database Activities :: Create Database
+
+Creating new database at version 1.
+Populating with sample data...
+Database version is now at 1.
+Database created.
+</code></pre><p>Для начальных данных следует использовать атрибут <code>_initial</code>.
+</p>
+
+<h2>Эволюция</h2>
+<p>Как то видеть объекты в виде &lt;Post entity oid:1 rev:0&gt; не очень здорово. Скопируем схему в <code>blogtut_002.py</code>, добавим методы <code>__unicode__</code> и <code>__repr__</code> чтобы объекты были красивей. Я здесь код приводить не буду, это банально. Гораздо интересней как это &quot;запихать&quot; в базу, поскольку схема читается только при создании базы (ну и еще при других подобных операциях, но я умолчу об этом). После того как база создана, она является вещью в себе, БД содержит внутри в том числе и описание схемы (<code>db.schema</code>, <code>db.schema_source</code>).
+</p>
+<p>Если б мы не изменили версию, а поменяли бы схему без изменения версии, то тогда нужно делать обновление (update) базы, мы же поменяли версию схемы, то нужно делать эволюцию (evolve):
+</p>
+<pre><code class="no-highlight">$ schevo db evolve --app=tutblog dev.db 2
+Schevo 3.1a1dev-r3564 :: Database Activities :: Evolve Database
+
+Current database version is 1.
+Read schema source for version 2.
+Evolving database to version 2...
+Database evolution to version 2 complete.
+Packing the database...
+Database evolution complete.
+</code></pre><p>Посмотрим, что получилось:
+</p>
+<pre><code class="python">&gt;&gt;&gt; db.Post.find()
+&lt;&lt;&lt;
+[&lt;Post: hello-world (2007-09-27 11:14:00) oid:1 rev:0&gt;,
+ &lt;Post: test (2007-09-28 17:36:00) oid:2 rev:0&gt;]
+&gt;&gt;&gt; list(db.Post.by('-created_at'))
+&lt;&lt;&lt;
+[&lt;Post: test (2007-09-28 17:36:00) oid:2 rev:0&gt;,
+ &lt;Post: hello-world (2007-09-27 11:14:00) oid:1 rev:0&gt;]
+&gt;&gt;&gt; db.Post.find(slug='test')
+&lt;&lt;&lt; [&lt;Post: test (2007-09-28 17:36:00) oid:2 rev:0&gt;]
+&gt;&gt;&gt; post = db.Post.findone(slug='hello-world')
+</code></pre><p>Как же посмотреть, какие комментарии относятся к данному посту? При помощи пространства имен <code>m</code> (one-to-many namespace)
+</p>
+<pre><code class="python">&gt;&gt;&gt; post.m.comments()
+&lt;&lt;&lt;
+[&lt;Comment: u'Pythy' on hello-world at 2007-09-27 12:42:00 oid:1 rev:0&gt;,
+ &lt;Comment: u'DummyCommenter' on hello-world at 2007-09-28 00:15:00 oid:2 rev:0&gt;]
+</code></pre><blockquote><p>Заметьте, что мы описывали сущность <code>Comment</code>, а метод называется <code>comments</code>. В Schevo есть правила преобразования единственного числа в множественное, но если Schevo спотыкается, можно явно указать, определив атрибут <code>_plural</code>.
+</p>
+</blockquote><p>Или теги:
+</p>
+<pre><code class="python">&gt;&gt;&gt; [pt.tag for pt in post.m.post_tags()]
+&lt;&lt;&lt; [&lt;Tag: u'Hello' (hello) oid:1 rev:0&gt;, &lt;Tag: u'Test' (test) oid:2 rev:0&gt;]
+</code></pre><p>Так не очень удобно. Здесь бы удобно было сделать дополнительный метод, который и возвращал бы список тегов. У Schevo для пользовательских методов есть специальное пространство имен - <code>x</code> (extenders). Так что к сущности &quot;Блог пост&quot; добавим свой метод:
+</p>
+<pre><code class="python">def x_tags(self):
+    return (posttag.tag for posttag in self.m.post_tags())
+</code></pre><p>И он будет доступен как <code>post.x.tags</code>. Не будем менять версию схемы, просто обновим:
+</p>
+<pre><code class="no-highlight">$ schevo db update --app=blogtut dev.db
+Schevo 3.1a1dev-r3564 :: Database Activities :: Update Database
+
+Opening database...
+Current database version is 2.
+Syncing database with new schema source...
+Packing the database...
+Database updated.
+</code></pre>
+<h2>Транзакции</h2>
+<p>В Schevo любое изменение можно сделать только при помощи явных транзакций, которые находятся в пространстве имен <code>t</code> (transaction). Для создания -- транзакции сущности, для обновления/удаления - транзакции объекта. После подтверждения транзакции возвращается сохраненный/измененный объект. С созданием объекта уже пример был, изменение/удаление:
+</p>
+<pre><code class="python">&gt;&gt;&gt; post = db.Post.findone(slug='test')
+&gt;&gt;&gt; tx = post.t.update()
+&gt;&gt;&gt; tx.body = u&quot;Just test, nothing else&quot;
+&gt;&gt;&gt; db.execute(tx)
+&lt;&lt;&lt; &lt;Post: test (2007-09-28 17:36:00) oid:2 rev:1&gt;
+</code></pre><p>Все бэкенды Schevo: <a href="http://www.mems-exchange.org/software/durus/">Durus</a> и <a href="http://cheeseshop.python.org/pypi/ZODB3">ZODB</a> (ZODB был добавлен относительно недавно, Durus был изначально) - при изменении объектов не удаляют старые, а добавляют новые ревизии объектов. Для удаления устаревших ревизий служит процедура упаковки (<code>db.pack</code>), которая автоматически выполняется при обновлении/эволюции.
+</p>
+<pre><code class="python">&gt;&gt;&gt; comment = db.Comment.findone(author_site=u&quot;http://www.pyobject.ru&quot;)
+&gt;&gt;&gt; tx = comment.t.delete()
+&gt;&gt;&gt; db.execute(tx)
+&gt;&gt;&gt; comment
+EntityDoesNotExist: &quot;OID 1 does not exist in 'Comment'&quot;
+</code></pre><p>Транзакции можно настраивать. Например, хочется, чтобы при создании комментария отправлялось письмо администратору. В Django такое делается при помощи сигналов PyDispatch и обработчиков. Schevo зависит от форка PyDispatch - <a href="http://pylouie.org/">Louie</a>, так что тоже воспользуемся сигналами. Внутри сущности &quot;Комментарий к постам в блоге&quot; создадим класс:
+</p>
+<pre><code class="python">class _Create(T.Create):
+    def _after_execute(self, db, entity):
+        louie.send(signal='on_create_comment', sender=self.__class__, db=db, entity=entity)
+</code></pre><p>Подробнее о кастомизированных транзакциях смотрите в <a href="http://goldenspud.com/rotr/index.php/2006/12/29/schevo-transaction-hook-methods/">блоге ROTR</a>.
+</p>
+<p>Код примера, как всегда, на <a href="http://pythy.googlecode.com/svn/trunk/schevo/">code.google.com</a>.
+</p>
+
+<h2>За бортом.</h2>
+<p>За бортом остались: расширенные запросы из пространства имен <code>Q</code> (query):
+</p>
+<pre><code class="python">&gt;&gt;&gt; matched = db.Q.Match(db.Post, 'slug', 'startswith', 'he')
+&gt;&gt;&gt; print matched
+Posts where Slug starts with he
+&gt;&gt;&gt; list(matched())
+&lt;&lt;&lt; [&lt;Post: hello-world (2007-09-27 11:14:00) oid:1 rev:0&gt;]
+</code></pre><p><a href="http://schevo.org/wiki/SchevoGtk">GTK2 CRUD-интерфейс</a> к Schevo:
+</p>
+<p><a href="http://www.pyobject.ru/static/img/uploaded/schevo_gnav_gui.png"><img src="http://www.pyobject.ru/static/img/uploaded/thumb_schevo_gnav_gui.png" /></a>
+</p>
+<p>и пример использования Schevo - <a href="http://schevo.org/browser/trunk/apps/Twitabit">Twitabit</a>.
+</p>
+
+<h2>Проблемы</h2>
+<p>В целом, Schevo оставляет приятное впечатление (идея, реализация). Очень сильно хромает документация, на обе ноги. Всё что есть <a href="http://schevo.org/browser/trunk/Schevo/doc">в комплекте</a> - читать обязательно.
+</p>
+<p>Проблема номер два: оба бэкенда (ZODB, Durus) блокируют файлы при открытии БД. Это означает, что они thread-safe, но не process-safe. Чтобы &quot;обойти&quot; это, ООДБ предлагают запускать сервер (DurusServer, ZEO), который монопольно открывает БД, и к серверу уже коннектятся клиенты, используя ClientStorage. Проблема в том, что Schevo &quot;заточен&quot; под локальные хранилища. Для pyobject.ru это вышло боком. Пришлось модифицировать функцию открытия БД в Schevo. Но ввиду агрессивного кеширования внутри каждого соединения, при модификации объектов вылезают различные косяки.
+</p>
+
+<h2>Субъективно</h2>
+<p>Субъективно, ниша Schevo - десктопные приложения.
+</p>
+{% endmark %}

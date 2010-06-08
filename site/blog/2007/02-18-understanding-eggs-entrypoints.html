@@ -1,0 +1,226 @@
+{% meta %}
+    tags: [plugins, eggs, setuptools, docs]
+    title: Разбираемся с egg's entrypoints
+{% endmeta %}
+
+{% mark body %}
+<p>В setuptools есть механизм плагинов - так называемых &quot;точек входа&quot;. Сегодня поговорим о том, как использовать egg's entrypoints в своих программах.
+</p>
+
+<!--more-->
+
+
+
+<h2>Egg's entrypoints - вводная</h2>
+<p><a href="http://peak.telecommunity.com/DevCenter/setuptools">setuptools</a> позволяют определять точки входа для плагинов. Эти точки определяются <em>у плагинов</em>, а программа, которая хочет использовать плагины &quot;спрашивает&quot; у setuptools, кто реализует данную EP (entry point, точка входа). Прежде чем начать, советую познакомиться с <a href="http://peak.telecommunity.com/DevCenter/PythonEggs">Python eggs</a> и с тем, <a href="http://www.pyobject.ru/blog/post/cooking-python-eggs/">как их правильно устанавливать</a>.
+
+</p>
+<p>Чтобы было легче с пониманием, будем разбираться на простом примере. Напишем программу, которая будет печатать списки. &quot;Что&quot; будет определяться плагином ввода, &quot;как&quot; - плагином вывода.
+</p>
+
+<h2>Без плагинов</h2>
+<p>Для начала, напишем программу, без плагинов. Программа будет выводить содержимое текущей директории
+</p>
+<pre><code># lister.input
+import os
+def dir_list():
+    &quot;&quot;&quot;
+    Lists current dir
+    &quot;&quot;&quot;
+
+    return os.listdir('.')
+</code></pre><p>в виде обычного списка
+</p>
+<pre><code># lister.output
+import pprint
+def raw_list(ilist):
+    &quot;&quot;&quot;
+    Prints list 'AS IS'
+    &quot;&quot;&quot;
+    pprint.PrettyPrinter().pprint(list(ilist))
+</code></pre><p>Соединяя вместе, получаем желаемую программу, без использования плагинов:
+</p>
+<pre><code>from lister.input import dir_list
+from lister.output import raw_list
+
+def listit_wo_plugins():
+    raw_list(dir_list())
+</code></pre>
+<h2>С плагинами</h2>
+
+<h3>Указание точек входа</h3>
+<p>Как выше сказано, нужно указать у плагинов точки входа. У нас будут плагины ввода (точка входа<code>lister.input</code>) и плагины вывода (точка входа <code>lister.output</code>). Точки входа указываются в метаданных пакета - в определении setup.py:
+</p>
+<pre><code>from setuptools import setup
+
+setup(
+    # ...  
+    entry_points=&quot;&quot;&quot;
+    [lister.output]
+    raw = lister.output:raw_list
+    [lister.input]
+    dir = lister.input:dir_list
+    &quot;&quot;&quot;
+)
+</code></pre><p>Точки входа указываются либо в формате ini-файла, многострочником; либо в виде словаря:
+</p>
+
+<pre><code>from setuptools import setup
+
+setup(
+    # ...  
+    entry_points={
+    'lister.output': ['raw = lister.output:raw_list'],
+    'lister.input': ['dir = lister.input:dir_list'],
+    }
+)
+</code></pre><p>У нас получилось так, что имя EP совпало с именем модуля, но это случайность, в общем случае это не так. Что касается определения плагина - то запись выглядит как
+</p>
+<pre><code>имя_плагина = путь.к.модулю:объект
+</code></pre><p>Конечным объектом может служить любой Python-объект (класс, функция, представитель класса и т.д.).
+</p>
+
+<h3>Использование точек входа</h3>
+<p>После определения точек входа мы можем воспользоваться инструментами setuptools для доступа к плагинам (поправка: egg с определенными EP должен быть установлен, так что я рекомендую поставить <a href="http://pythy.googlecode.com/svn/trunk/eggs_entrypoints/lister/">уже готовый lister</a>).
+</p>
+<pre><code>&gt;&gt;&gt; import pkg_resources
+&gt;&gt;&gt; pkg_resources.get_entry_map('lister')
+{'lister.input': {'dir': EntryPoint.parse('dir = lister.input:dir_list')},
+'lister.output': {'raw': EntryPoint.parse('raw = lister.output:raw_list')}}
+&gt;&gt;&gt; pkg_resources.load_entry_point('lister', 'lister.output', 'raw')
+&lt;function raw_list at 0xb788c95c&gt;
+&gt;&gt;&gt; list(pkg_resources.iter_entry_points('lister.input'))
+[EntryPoint.parse('dir = lister.input:dir_list')]
+</code></pre><p>Указанных функций хватит для большинства случаев. Документация по setuptools весьма бедна, зато практически у всех функций/методов есть <a href="http://www.pyobject.ru/blog/post/cooking-python-eggs/">как их правильно устанавливать</a>.
+</p>
+<p>Я выделил работу с плагинами в отдельный модуль - <code>plug.py</code>. Основная функция показаны ниже:
+</p>
+<pre><code>def get_plugins_by_entrypoint(ep_name, plug_name=None):
+    &quot;&quot;&quot;
+    Returns iterator over names, descriptions and plugin-actions 
+    for current entrypoint
+    &quot;&quot;&quot;
+
+    for entrypoint in pkg_resources.iter_entry_points(ep_name, plug_name):
+        plugin_func = entrypoint.load()
+        plugin_description = plugin_func.__doc__
+        yield (entrypoint.name, plugin_description, plugin_func)
+</code></pre><p>Если имя плагина не передается, то строится список по всем плагинам для данной точки входа. В случае какой-либо ошибки (не найдена точка входа, не найден плагин) - возвращается пустой итератор.
+</p>
+
+<h3>Всё вместе</h3>
+<p>Отдельные элементы уже работают как надо. так что нужно собрать всё в месте.
+</p>
+<p>Стоит начать с управление параметрами командной строки (<code>lister.command</code>):
+</p>
+<pre><code># lister.command
+
+import sys
+
+from lister import plug
+
+def runner(argv):
+    &quot;&quot;&quot;
+    Parses command-line options
+    &quot;&quot;&quot;
+
+    # defaults    
+    iplugin = 'dir'
+    oplugin = 'raw'
+
+    # ... Здесь идет разбор переданных параметров.
+    # ... В зависимости от них, либо выводится список
+    # ... доступных плагинов, либо переопределяются
+    # ... переменные iplugin и/или oplugin
+
+    iplugins_data = list(plug.get_input_plugins(iplugin))
+    if not iplugins_data:
+        print &quot;No such input plugin: %s&quot; % iplugin
+        sys.exit(1)
+    else:
+        input_plugin = iplugins_data[0][-1]
+
+    oplugins_data = list(plug.get_output_plugins(oplugin))
+    if not oplugins_data:
+        print &quot;No such output plugin: %s&quot; % oplugin
+        sys.exit(1)
+    else:
+        output_plugin = oplugins_data[0][-1]
+
+    return input_plugin, output_plugin
+</code></pre><p>По результатам разбора параметров командной строки, либо программа завершает свою работу (например, в случае ошибки), либо возвращает загруженные плагины. Так что в главном модуле остается просто воспользоваться результатами:
+</p>
+<pre><code>from lister.command import runner
+
+def listit(input_plugin, output_plugin):
+    &quot;&quot;&quot;
+    Lists data using specified input and output plugins
+    &quot;&quot;&quot;
+    output_plugin(input_plugin())
+
+def main():
+    &quot;&quot;&quot;
+    Runs lister from command line
+    &quot;&quot;&quot;
+    iplugin, oplugin = runner(sys.argv)
+    listit(iplugin, oplugin)
+
+if __name__ = '__main__':
+    main()
+</code></pre><p>Теперь вроде всё. Можно попробовать запустить программу:
+</p>
+<pre><code>$ listit
+['lister', 'setup.py', 'scripts', 'lister.egg-info']
+</code></pre>
+<h2>Дописываем плагины</h2>
+<p>Надеюсь, у вас получилось с <code>lister</code> и теперь мы попробуем написать плагин, скажем, для вывода в html.
+</p>
+<p>Для этого создаем пакет, скажем <code>listerhtml</code>. В нем пишем функцию вывода списка в html:
+
+</p>
+<pre><code>def html_list(ilist):
+    &quot;&quot;&quot;
+    Prints list as HTML unordered list
+    &quot;&quot;&quot;
+    print &quot;&lt;ul&gt;&quot;
+    for element in ilist:
+        print &quot;&lt;li&gt;%s&lt;/li&gt;&quot; % element
+    print &quot;&lt;/ul&gt;&quot;
+
+</code></pre><p>И в метаданных пакета записываем, что это - плагин к <code>lister.output</code>:
+</p>
+<pre><code>from setuptools import setup
+
+setup(
+    # ...
+    entry_points={
+        'lister.output': ['html=listerhtml:html_list'],
+    }
+)
+</code></pre><p>Теперь устанавливаем его (<code>python setup.py install</code>) и смотрим список плагинов к <code>listit</code>:
+</p>
+<pre><code>$ listit --list
+Input plugins:
+dir
+    Lists current dir
+
+Output plugins:
+raw
+    Prints list 'AS IS'
+
+html
+    Prints list as HTML unordered list
+
+$ listit -o html
+&lt;ul&gt;
+&lt;li&gt;lister&lt;/li&gt;
+&lt;li&gt;setup.py&lt;/li&gt;
+&lt;li&gt;scripts&lt;/li&gt;
+&lt;li&gt;lister.egg-info&lt;/li&gt;
+&lt;/ul&gt;
+</code></pre>
+<h2>Заключение</h2>
+
+<p>setuptools дает возможность достаточно просто реализовать плагины к своим программам. Единственный недостаток - это необходимость, чтобы нужный egg был установлен. Рабочий код <code>lister</code> и плагина к нему <code>listerhtml</code>, как обычно, - <a href="http://pythy.googlecode.com/svn/trunk/eggs_entrypoints/">на code.google.com</a>.
+</p>
+{% endmark %}

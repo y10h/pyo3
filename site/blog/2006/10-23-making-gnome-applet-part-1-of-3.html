@@ -1,0 +1,320 @@
+{% meta %}
+    tags: [gnome, pygtk, docs]
+    title: Создание апплета GNOME: часть первая (из трех)
+{% endmeta %}
+
+{% mark body %}
+<p>Этот цикл посвящен теме создания апплетов для панели <a href="http://www.gnome.org/">GNOME</a>. Если кратко, апплет - это маленькое приложение, которое встраивается в панель и либо информирует о чем-либо (например,  погоде, или о состоянии батареи), либо выполняет какие-либо одноэтапные действия (запускает поиск, изменяет громкость и т.д.). 
+</p>
+<p>Я буду создавать простой апплет для включения/выключения прокси в GNOME.
+</p>
+<p>Прежде чем начать, стоит упомянуть один документ, который описывает создание апплета средствами Python и PyGTK: это <a href="http://pygtk.org/articles/applets_arturogf/">GNOME applets with Python</a>. Однако, на мой взгляд, у него есть ряд недостатков, которые и побудили меня осветить эту тему по-своему.
+</p>
+<p>Итак, приступим.
+</p>
+
+<!--more-->
+
+
+<p>В первой части я буду создавать скелет апплета и регистрировать его в GNOME, во второй буду писать функциональную часть, а в третьей - заниматься &quot;полировкой&quot; и украшательствами.
+</p>
+
+<h2>Скелет апплета</h2>
+<p>Перво-наперво, выделю то, что необходимо для функционирования любого апплета, вне зависимости от его природы:
+</p>
+<ul>
+ <li>
+     некий виджет-контейнер (например, <code>HBox</code>)
+ </li>
+
+ <li>
+     некий &quot;полезный&quot; виджет (у меня это будет <code>Label</code>)
+ </li>
+
+ <li>
+     всплывающая подсказка
+ </li>
+
+ <li>
+     некое действие по левой кнопки мыши
+ </li>
+
+ <li>
+     контекстное меню
+ </li>
+
+ <li>
+     возможность запуска как отдельного приложения (для отладки)
+ </li>
+
+ <li>
+     регистрация в GNOME как апплета к панели
+ </li>
+</ul>
+<p>Займемся реализацией:
+</p>
+<pre><code>
+import sys
+import gtk
+import gtk.gdk
+import gnome.ui
+import gnomeapplet
+
+class GnomeAppletSkeleton(gnomeapplet.Applet):
+    &quot;&quot;&quot;Simple applet skeleton&quot;&quot;&quot;
+
+    def __init__(self, applet):
+        &quot;&quot;&quot;Create applet&quot;&quot;&quot;
+
+        self.applet = applet
+        self.__init_core_widgets()
+        self.init_additional_widgets()
+        self.init_ppmenu()
+        self.__connect_events()
+        self.applet.connect(&quot;destroy&quot;, self._cleanup)
+        self.after_init()
+        self.applet.show_all()
+</code></pre><p>Прежде чем приступить к пояснениям, скажу о конвенции насчет имен методов. Если имя метод начинается с двух подчеркиваний, то перегружать (переопределять) такой метод нежелательно. Если же имя метода начинается с буквы, то такой метод можно практически безболезненно перегружать. Но все же, если Вы будете писать свой апплет, то все же гляньте код соответствующего метода <code>GnomeAppletSkeleton</code> прежде чем перегружать его.
+</p>
+<p>Итак, первым делом инициализирую ключевые виджеты, без которых не обойдется ни один апплет:
+</p>
+<pre><code>def __init_core_widgets(self):
+    &quot;&quot;&quot;Create internal widgets&quot;&quot;&quot;
+    self.tooltips = gtk.Tooltips()
+    self.hbox = gtk.HBox()
+    self.ev_box = gtk.EventBox()
+    self.applet.add(self.hbox)
+    self.hbox.add(self.ev_box)
+</code></pre><p>Поскольку апплет - безоконный виджет (у него нет окна), то для того, чтобы была возможность реагировать на события, я помещаю <code>EventBox</code> в него. А уж все дополнительные виджеты (в моем случае это будет только <code>Label</code>)  добавляются к <code>ev_box</code>.
+
+</p>
+<pre><code>def init_additional_widgets(self):
+    &quot;&quot;&quot;Create additional widgets&quot;&quot;&quot;
+    self.label = gtk.Label(&quot;Dummy&quot;)
+    self.ev_box.add(self.label)
+</code></pre><p>Далее, указываю необходимую информацию для контекстного меню (popup menu):
+</p>
+<pre><code>def init_ppmenu(self):
+    &quot;&quot;&quot;Create popup menu&quot;&quot;&quot;
+    self.ppmenu_xml = &quot;&quot;&quot;
+    &lt;popup name=&quot;button3&quot;&gt;
+
+    &lt;menuitem name=&quot;About Item&quot; verb=&quot;About&quot; stockid=&quot;gtk-about&quot; /&gt;
+    &lt;/popup&gt;
+    &quot;&quot;&quot;
+
+    self.ppmenu_verbs = [
+        (&quot;About&quot;, self.on_ppm_about),
+    ]
+</code></pre><p>Заметьте, что в XML-описании пункта меню &quot;О программе&quot; нет собственно названия пункта, а лишь его StockID. Это сделано по той простой причине, что пункт меню &quot;О программе&quot; стандартен для большинства приложений и в случае указания StockID Вы получаете:
+</p>
+<ul>
+ <li>
+     стандартную иконку для данного пункта (причем, с изменением темы оформления GNOME эта иконка может меняться)
+ </li>
+
+ <li>
+     стандартное название пункта меню, причем автоматически переведенное на нужный язык
+ </li>
+</ul>
+<p>Каждый пункт меню имеет &quot;глагол&quot;-действие, который ставится ему в соответствие. <code>self.ppmenu_verbs</code> же задает соответствие между &quot;глаголом&quot;-действием и callback-функцией.
+</p>
+<p>Следующий шаг по созданию апплета - &quot;соединение&quot; callback-функций и событий:
+
+</p>
+<pre><code>def __connect_events(self):
+    &quot;&quot;&quot;Connect applet's events to callbacks&quot;&quot;&quot;
+    self.ev_box.connect(&quot;button-press-event&quot;, self.on_button)
+    self.ev_box.connect(&quot;enter-notify-event&quot;, self.on_enter)
+    self.button_actions = {
+        1: lambda: None,
+        2: lambda: None,
+        3: self._show_ppmenu,
+    }
+</code></pre><p>Еще раз отмечу, что апплет - безоконный виджет, поэтому все события генерирует <code>ev_box</code>. В данном случае, я соединил события &quot;нажатие на кнопку&quot; с callback-функцией <code>self.on_button</code> и событие &quot;попадание курсора в область виджета&quot; с callback-функцией <code>self.on_enter</code>. Здесь же при помощи словаря <code>self.button_actions</code> задал соответствие между кнопками мыши и функциями-действиями. Стоит заметить, что callback-функции, соединенные с событиями должны быть определенной сигнатуры (об этом чуть позже),  а функции-действия не должны принимать ни один параметр.
+
+</p>
+<p>Следующий по порядку вызов - это метод <code>after_init</code>. В скелете он пустой, предназначен специально для переопределения в потомках.
+</p>
+<p>С этапами создания апплета вроде завершил, остались callback-функции... Я не буду пересказывать <a href="http://pygtk.org/reference.html">PyGTK reference</a>, лишь перечислю типы callback-функций и их сигнатуры, которые встречаются у меня:
+</p>
+<ul>
+ <li>
+     callback-функция на событие <code>destroy</code> апплета. Сигнатура function(event). Реализация - <code>_cleanup</code>
+
+ </li>
+
+ <li>
+     callback-функция на события <code>ev_box</code>. Сигнатура function(widget, event). Реализации - <code>on_enter</code>, <code>on_button</code>
+ </li>
+
+ <li>
+
+     callback-функция на пункт меню. Сигнатура function(event, data=None). Реализация - <code>on_ppm_about</code>
+ </li>
+
+ <li>
+     функция-действие (мое название) на нажатие одной из кнопок мыши. Сигнатура function(). Реализация - <code>_show_ppmenu</code>.
+ </li>
+</ul>
+<p>Содержимое callback-функции <code>_cleanup</code> не буду приводить - оно слишком тривиально (удаляется объект <code>self.applet</code>) для того, чтобы занимать место, а кому интересно - гляньте в полном исходном тексте апплета. Что касается остальных callback-функций, я их приведу и прокомментирую, поскольку они все же представляют интерес.
+
+</p>
+<pre><code>def on_button(self, widget, event):
+    &quot;&quot;&quot;Action on pressing button in applet&quot;&quot;&quot;
+    if event.type == gtk.gdk.BUTTON_PRESS:
+        self.button_actions[event.button]()
+</code></pre><p>Callback-функция <code>on_button</code> вызывается при нажатии любой кнопки мыши внутри виджета. И внутри этой функции я во-первых убеждаюсь, что присоединили к правильному событию (нажатию на клавишу), а во-вторых вызываю нужную функцию-действие, выбирая (в event.button хранится номер кнопки, нажатие на которую и вызвало появление данного события) из ранее описанного словаря <code>self.button_actions</code>. Для кнопок 1 и 2 у меня пустые действия, для 3 - контекстное меню. Показ контекстного меню - специальный метод класса <code>Applet</code> - <code>setup_menu</code>. Первый аргумент - XML-описание меню, второй - &quot;глаголы&quot;-действия, третий - пользовательские данные (передаются третьим параметром в callback-функцию).
+
+</p>
+<pre><code>def _show_ppmenu(self):
+    &quot;&quot;&quot;Show popup menu&quot;&quot;&quot;
+    self.applet.setup_menu(self.ppmenu_xml, self.ppmenu_verbs, None)
+</code></pre><p>Что касается события &quot;попадание курсора в область виджета&quot;, то на него я реагировать буду так: показывать какую-нибудь простенькую подсказку, ради разнообразия сделав ее динамической.
+</p>
+<pre><code>def on_enter(self, widget, event):
+    &quot;&quot;&quot;Action on entering&quot;&quot;&quot;
+    info = &quot;Hey, it just skeleton\nAnd on_enter event time is %d&quot; % \
+           event.time
+    self.tooltips.set_tip(self.ev_box, info)
+
+</code></pre><p>И последняя callback-функция - на вызов пункта меню &quot;О программе&quot;. Здесь я воспользуюсь стандартным диалогом из модуля <code>gnome.ui</code>:
+</p>
+<pre><code>def on_ppm_about(self, event, data=None):
+    &quot;&quot;&quot;Action on choosing 'about' in popup menu&quot;&quot;&quot;
+    gnome.ui.About(&quot;GNOME Applet Skeleton&quot;, &quot;0.1&quot;, &quot;GNU General Public License v.2&quot;,
+                    &quot;Simple skeleton for Python powered GNOME applet&quot;,
+                    [&quot;Pythy &lt;the.pythy@gmail.com&gt;&quot;,]
+                   ).show()
+
+</code></pre><p>Класс-костяк апплета написан, теперь нужно описать его &quot;фабрику&quot;:
+</p>
+<pre><code>def applet_factory(applet, iid):
+    GnomeAppletSkeleton(applet, iid)
+    return True
+</code></pre><p>Ух. С первым этапом закончил. Костяк апплета сделан. Осталось дело за малым. Запустить и посмотреть, что же получилось :)
+</p>
+
+<h2>Запуск апплета в отдельном окне</h2>
+<p>Для начала нужно отладить апплет, для этого пишу код, позволяющий запускать апплет в отдельном окне:
+</p>
+<pre><code>def run_in_window():
+    main_window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+    main_window.set_title(&quot;GNOME Applet Skeleton&quot;)
+    main_window.connect(&quot;destroy&quot;, gtk.main_quit)
+    app = gnomeapplet.Applet()
+    applet_factory(app, None)
+    app.reparent(main_window)
+    main_window.show_all()
+    gtk.main()
+    sys.exit()
+
+def main(args):
+    if len(args) == 2 and args[1] == &quot;run-in-window&quot;:
+        run_in_window()
+    else:
+        run_in_panel()
+
+if __name__ == '__main__':
+    main(sys.argv)
+
+</code></pre><p>Небольшой комментарий по коду: если файл запускается как скрипт, то выполняется функция <code>main</code>, в ней, в зависимости от того, передан ли аргумент <code>run-in-window</code>, апплет запускается либо в окне (функция <code>run_in_window</code>), либо в панели (<code>run_in_panel</code>). Про функцию <code>run_in_panel</code> чуть ниже, а в <code>run_in_window</code> стоит обратить внимание на строчку <code>app.reparent(main_window)</code>. Этим собственно и достигается, что апплет запускается в отдельном окне.
+
+</p>
+<p>Как выглядит костяк апплета можно увидеть на скриншотах:
+
+<a rel="attachment" class="imagelink" href="http://gorod-omsk.ru/blog/pythy/?attachment_id=50" title="AppletSkeleton in windowed mode, with tooltips"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/10/windowed_tooltip.thumbnail.png" alt="AppletSkeleton in windowed mode, with tooltips" /></a>
+
+<a rel="attachment" class="imagelink" href="http://gorod-omsk.ru/blog/pythy/?attachment_id=51" title="AppletSkeleton in windowed mode, with popup menu"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/10/windowed_ppmenu.thumbnail.png" alt="AppletSkeleton in windowed mode, with popup menu" /></a>
+
+<a rel="attachment" class="imagelink" href="http://gorod-omsk.ru/blog/pythy/?attachment_id=52" title="AppletSkeleton in windowed mode, with 'about' dialog"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/10/windowed_about.thumbnail.png" alt="AppletSkeleton in windowed mode, with 'about' dialog" /></a>
+</p>
+
+<h2>Регистрация апплета в панели GNOME</h2>
+<p>Если выше был обычный Python-код, с некоторой PyGTK-спецификой, то сейчас будет сплошная магия ;) Это, кстати, одна из слабых сторон GNOME-Python - отсутствие систематической документации (для <code>gnomeapplet</code> вообще никакой документации нет, за исключением пары примеров и вышеупомянутой &quot;методички&quot;). К примеру, в при регистрации апплета вызывается функция <code>applet_bonobo_factory</code>, однако нигде не упоминается, какие параметры в нее передаются. Чтобы узнать это, нужно лезть в исходные тексты. Я, конечно, понимаю, что &quot;Use code, Luke!&quot;, но все же качество документации по PyGTK в целом хромает (например, сплошь и рядом в документации рекомендуются методы, которые уже пару версий назад как уже объявлены устаревшими).
+</p>
+
+<p>Общая идеология регистрации апплета такова:
+</p>
+<ul>
+ <li>
+     описываем мета-информацию в специальном .server файле
+ </li>
+
+ <li>
+     в апплете вызываем специальный интерфейс
+ </li>
+</ul>
+<p>Вначале закончу дело с кодом апплета:
+</p>
+
+<pre><code>def run_in_panel():
+    gnomeapplet.bonobo_factory(&quot;OAFIID:GNOME_AppletSkeleton_Factory&quot;,
+                               GnomeAppletSkeleton.__gtype__,
+                               &quot;Applet skeleton&quot;,
+                               &quot;0&quot;,
+                               applet_factory)
+</code></pre><p>это и есть вызов &quot;специального интерфейса&quot;. Параметры такие: IID (уникальный идентификатор сервиса в GNOME), тип (это остатки C-природы GTK, тип GObject), имя, версия, callback-функция.
+</p>
+<p>Теперь что касается &quot;описания мета-информации&quot;. Пишем следующий XML (он для всех апплетов будет идентичным, специфичные для моего апплета данные я выделил полужирным):
+</p>
+<pre><code>&lt;oaf_info&gt;
+
+&lt;oaf_server iid=&quot;OAFIID:<strong>GNOME_AppletSkeleton_Factory</strong>&quot;
+                    type=&quot;exe&quot;                    location=&quot;<strong>/usr/local/lib/pygnomeapplet/applet_skeleton.py</strong>&quot;&gt;
+    &lt;oaf_attribute name=&quot;repo_ids&quot; type=&quot;stringv&quot;&gt;
+        &lt;item value=&quot;IDL:Bonobo/GenericFactory:1.0&quot; /&gt;
+        &lt;item value=&quot;IDL:Bonobo/Unknown:1.0&quot; /&gt;
+    &lt;/oaf_attribute&gt;
+    &lt;oaf_attribute name=&quot;name&quot; type=&quot;string&quot; value=&quot;<strong>Applet skeleton factory</strong>&quot; /&gt;
+    &lt;oaf_attribute name=&quot;name-ru&quot; type=&quot;string&quot; value=&quot;<strong>Фабрика скелета апплета</strong>&quot; /&gt;
+    &lt;oaf_attribute name=&quot;description&quot; type=&quot;string&quot; value=&quot;<strong>Factory of simple applet skeleton</strong>&quot; /&gt;
+    &lt;oaf_attribute name=&quot;description-ru&quot; type=&quot;string&quot; value=&quot;<strong>Фабрика скелета простейшего апплета</strong>&quot; /&gt;
+&lt;/oaf_server&gt;
+&lt;oaf_server iid=&quot;OAFIID:<strong>GNOME_AppletSkeleton</strong>&quot;
+                    type=&quot;factory&quot;                    location=&quot;OAFIID:<strong>GNOME_AppletSkeleton_Factory</strong>&quot;&gt;
+    &lt;oaf_attribute name=&quot;repo_ids&quot; type=&quot;stringv&quot;&gt;
+        &lt;item value=&quot;IDL:GNOME/Vertigo/PanelAppletShell:1.0&quot; /&gt;
+        &lt;item value=&quot;IDL:Bonobo/Control:1.0&quot; /&gt;
+        &lt;item value=&quot;IDL:Bonobo/Unknown:1.0&quot; /&gt;
+    &lt;/oaf_attribute&gt;
+    &lt;oaf_attribute name=&quot;name&quot; type=&quot;string&quot; value=&quot;<strong>Applet skeleton</strong>&quot; /&gt;
+    &lt;oaf_attribute name=&quot;name-ru&quot; type=&quot;string&quot; value=&quot;<strong>Скелет апплета</strong>&quot; /&gt;
+    &lt;oaf_attribute name=&quot;description&quot; type=&quot;string&quot; value=&quot;<strong>Simple applet skeleton, do nothing</strong>&quot; /&gt;
+    &lt;oaf_attribute name=&quot;description-ru&quot; type=&quot;string&quot; value=&quot;<strong>Скелет простого апплета, ни делает ни чего</strong>&quot; /&gt;
+    &lt;oaf_attribute name=&quot;panel:category&quot; type=&quot;string&quot; value=&quot;<strong>Accessories</strong>&quot; /&gt;
+    &lt;oaf_attribute name=&quot;panel:icon&quot; type=&quot;string&quot; value=&quot;<strong>gnome-panel.png</strong>&quot; /&gt;
+&lt;/oaf_server&gt;
+&lt;/oaf_info&gt;
+</code></pre><p>Так, что тут: два раздела, фабрика и сам апплет. Для каждого определены IID, у фабрики IID должен совпадать с тем, что указали в вызове <code>bonobo_factory</code> в апплете. Дополнительно отмечу, что тут же можно задавать переводы названия/описания апплета (в данном случае будет на русском, если у Вас русская локаль и на английском во всех остальных случаях). Называем этот файл GNOME_AppletSkeleton.server и &quot;скармливаем&quot; его Bonobo Activation Server. Существует несколько вариантов этого &quot;действа&quot;:
+
+</p>
+<ol>
+ <li>
+     Поместить .server в каталог <code>/usr/lib/bonobo/servers</code>
+ </li>
+
+ <li>
+     Изменить <code>/etc/bonobo-activation/bonobo-activation-config.xml</code> (там есть несколько примеров), добавить нужный путь (скажем, <code>/usr/local/lib/bonobo/servers</code>) и положить .server туда
+ </li>
+
+ <li>
+     В переменную <code>BONOBO_ACTIVATION_PATH</code> добавить каталог, где лежит .server.
+ </li>
+</ol>
+<p>Мне наиболее правильным показался второй вариант, я его и использовал. 
+</p>
+<p>После этого скрещиваем пальцы и пытаемся добавить апплет на панель. Если .server правильно &quot;скормили&quot;, то апплет-скелет появляется в списке кандидатов на добавление. Если и все остальное сделали верно, то добавление пройдет гладко. И Вы получите примерно такой результат:
+
+<a rel="attachment" class="imagelink" href="http://gorod-omsk.ru/blog/pythy/?attachment_id=53" title="AppletSkeleton in paneled mode, add to toolbar dialog"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/10/paneled_addto.thumbnail.png" alt="AppletSkeleton in paneled mode, add to toolbar dialog" /></a>
+
+<a rel="attachment" class="imagelink" href="http://gorod-omsk.ru/blog/pythy/?attachment_id=54" title="AppletSkeleton in paneled mode, with tooltips"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/10/paneled_tooltip.thumbnail.png" alt="AppletSkeleton in paneled mode, with tooltips" /></a>
+
+<a rel="attachment" class="imagelink" href="http://gorod-omsk.ru/blog/pythy/?attachment_id=55" title="AppletSkeleton in paneled mode, with popup menu"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/10/paneled_ppmenu.thumbnail.png" alt="AppletSkeleton in paneled mode, with popup menu" /></a>
+</p>
+<p>Стоит отметить, что контекстное меню в &quot;режиме окна&quot; и в &quot;режиме панели&quot; отличаются - для панели появляются дополнительные пункты меню.
+
+</p>
+<p>На сегодня, я думаю, достаточно. Полный код примера Вы можете взять <a href="http://pythy.googlecode.com/svn/trunk/gnomeapplet_01">здесь</a> В следующий раз скелет будет обрастать мясом ;)
+</p>
+{% endmark %}

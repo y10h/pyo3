@@ -1,0 +1,281 @@
+{% meta %}
+    tags: [python, learning]
+    title: Вопросы и задания по Python
+{% endmeta %}
+
+{% mark body %}
+<p>Меня периодически спрашивают о тестовых заданиях по Python-тематике. Я решил
+обобщить вопросы и написать их в одном месте. Я не использую эти вопросы и задания в
+собеседованиях, но использую при обучении.</p>
+
+<!--more-->
+
+<h3>Типы данных, основные конструкции</h3>
+
+<ol>
+<li>Как получить список всех атрибутов объекта</li>
+<li>Как получить список всех публичных атрибутов объекта</li>
+<li>Как получить список методов объекта</li>
+<li>В какой "магической" переменной хранится содержимое help?</li>
+<li>Есть два кортежа, получить третий как конкатенацию первых двух</li>
+<li>Есть два кортежа, получить третий как объединение уникальных элементов первых двух кортежей</li>
+<li>Почему если в цикле меняется список, то используется <code>for x in lst[:]</code>, что означает <code>[:]</code>?</li>
+<li>Есть два списка одинаковой длины, в одном ключи, в другом значения. Составить словарь.</li>
+<li>Есть два списка разной длины, в одном ключи, в другом значения. Составить словарь. Для ключей, для которых нет значений использовать None в качестве значения. Значения, для которых нет ключей игнорировать.</li>
+<li>Есть словарь. Инвертировать его. Т.е. пары ключ: значение поменять местами &mdash; значение: ключ.</li>
+<li>Есть строка в юникоде, получить 8-битную строку в кодировке utf-8 и cp1251</li>
+<li>Есть строка в кодировке cp1251, получить юникодную строку</li>
+</ol>
+
+<h3>Функции</h3>
+
+<ol>
+<li><p>Написать функцию, которой можно передавать аргументы либо списком/кортежем,
+либо по одному. Функция производит суммирование всех аргументов.</p>
+
+<code><pre>&gt;&gt;&gt; f(1, 2, 3)
+6
+&gt;&gt;&gt; f([1, 2, 3])
+6
+&gt;&gt;&gt; f((3, 5, 6))
+14
+&gt;&gt;&gt; f(3, (5, 6))
+14</pre></code></li>
+
+<li><p>Написать функцию-фабрику, которая будет возвращать функцию сложения с
+аргументом.</p>
+
+<code><pre>&gt;&gt;&gt; add5 = addition(5) # функция addition возвращает функцию сложения с 5
+&gt;&gt;&gt; add5(3) # вернет 3 + 5 = 8
+8
+&gt;&gt;&gt; add5(8) # вернет 8 + 5 = 13
+13
+
+&gt;&gt;&gt; add8 = addition(8)
+&gt;&gt;&gt; add8(2) # вернет 2 + 8 = 10
+10
+&gt;&gt;&gt; add8(4) # вернет 4 + 8 = 12
+12</pre></code>
+<p>Написать варианты с обычной "внутренней" и анонимной lambda-функцией.</p></li>
+
+<li><p>Написать фабрику, аналогичную п.2, но возвращающей список таких функций</p>
+
+<code><pre>
+&gt;&gt;&gt; additionals = addition_range(0, 5) # список из функций сложения от 0 до 5 включительно
+</pre></code>
+
+<p>т.е. аналогичное <code>[add0, add1, add2, add3, add4, add5]</code></p></li>
+<li><p>Написать аналог map:</p>
+<ul>
+<li>первым аргументом идет либо функция, либо список функций</li>
+<li>вторым аргументом &mdash; список аргументов, которые будут переданы функциям</li>
+<li>полагается, что эти функции &mdash; функции одного аргумента</li>
+</ul>
+
+<code><pre>&gt;&gt;&gt; mymap([add0, add1, add2], [1, 2, 3])
+[(1, 2, 3), (2, 3, 4), (3, 4, 5)]</pre></code>
+
+<p>в данном случае "развернутая" запись будет:
+<code>[(add0(1), add0(2), add0(3)), (add1(1), add1(2), add1(3)), (add2(1), add2(2), add2(3))]</code></p></li>
+</ol>
+
+<h3>Итераторы</h3>
+
+<ol>
+<li><p>Написать функцию-генератор cycle которая бы возвращала циклический итератор.</p>
+
+<code><pre>&gt;&gt;&gt; i = iter([1, 2, 3])
+&gt;&gt;&gt; c = cycle(i)
+&gt;&gt;&gt; c.next()
+1
+&gt;&gt;&gt; c.next()
+2
+&gt;&gt;&gt; c.next()
+3
+&gt;&gt;&gt; c.next()
+1</pre></code>
+</li>
+<li><p>Написать функцию-генератор chain, которая последовательно итерирует переданные объекты (произвольное количество)</p>
+
+<pre><code>&gt;&gt;&gt; i1 = iter([1, 2, 3])
+&gt;&gt;&gt; i2 = iter([4, 5])
+&gt;&gt;&gt; c = chain(i1, i2)
+&gt;&gt;&gt; c.next()
+1
+&gt;&gt;&gt; c.next()
+2
+&gt;&gt;&gt; c.next()
+3
+&gt;&gt;&gt; c.next()
+4
+&gt;&gt;&gt; c.next()
+5
+&gt;&gt;&gt; c.next()
+Traceback (most recent call last):
+  ...
+StopIteration</pre></code></li>
+</ol>
+
+<p>Для функций и итераторов написать доктесты</p>
+
+<h3>Модули</h3>
+
+<ol>
+<li>У нас есть импортированный модуль foo, как узнать физический путь файла, откуда он импортирован?</li>
+<li>Из модуля foo вы импортируете модуль feedparser. Версия X feedparser'а есть в общесистемном каталоге site-packages, версия Y &mdash; рядом с модулем foo. Определена переменная окружения <code>PYTHONPATH</code>, и там тоже есть feedparser, версии Z. Какая версия будет использоваться?</li>
+<li>Как посмотреть список каталогов, в которых Python ищет модули?</li>
+<li>У вас есть модуль foo, внутри него импортируется модуль bar. Рядом с модулем foo есть файлы <code>bar.py</code> и <code>bar/__init__.py</code> Какой модуль будет использоваться.</li>
+<li>Что означает и для чего используется конструкция <code>__name__ == '__main__'</code></li>
+</ol>
+
+<h3>Классы</h3>
+
+<ol>
+<li><p>Написать базовый класс Observable, который бы позволял наследникам:
+<ol style="list-style-type: lower-alpha">
+<li>при передаче <code>**kwargs</code> заносить соответствующие значения как атрибуты</li>
+<li>сделать так, чтобы при print отображались все публичные атрибуты</li>
+</ol>
+
+<code><pre>&gt;&gt;&gt; class X(Observable):
+...     pass
+&gt;&gt;&gt; x = X(foo=1, bar=5, _bazz=12, name='Amok', props=('One', 'two'))
+&gt;&gt;&gt; print x
+X(bar=5, foo=1, name='Amok', props=('One', 'two'))
+&gt;&gt;&gt; x.foo
+1
+&gt;&gt;&gt; x.name
+'Amok'
+&gt;&gt;&gt; x._bazz
+12</pre></code></li>
+<li><p>Написать класс, который бы по всем внешним признакам был бы словарем, но позволял обращаться к ключам как к атрибутам.</p>
+
+<code><pre>&gt;&gt;&gt; x = DictAttr([('one', 1), ('two', 2), ('three', 3)])
+&gt;&gt;&gt; x
+{ 'one': 1, 'three': 3, 'two': 2}
+&gt;&gt;&gt; x['three']
+3
+&gt;&gt;&gt; x.get('one')
+1
+&gt;&gt;&gt; x.get('five', 'missing')
+'missing'
+&gt;&gt;&gt; x.one
+1
+&gt;&gt;&gt; x.five
+Traceback (most recent call last):
+  ...
+AttributeError</pre></code>
+</li>
+<li><p>Пункт 2 с усложнением: написать родительский класс <code>XDictAttr</code> так, чтобы у наследника динамически определялся ключ по наличию метода <code>get_&lt;KEY&gt;</code>.</p>
+
+<code><pre>&gt;&gt;&gt; class X(XDictAttr):
+...     def get_foo(self):
+...         return 5
+...     def get_bar(self):
+...         return 12</p>
+
+&gt;&gt;&gt; x = X({'one': 1, 'two': 2, 'three': 3})
+&gt;&gt;&gt; x
+X: { 'one': 1, 'three': 3, 'two': 2}
+&gt;&gt;&gt; x['one']
+1
+&gt;&gt;&gt; x.three
+3
+&gt;&gt;&gt; x.bar
+12
+&gt;&gt;&gt; x['foo']
+5
+&gt;&gt;&gt; x.get('foo', 'missing')
+5
+&gt;&gt;&gt; x.get('bzz', 'missing')
+'missing'</pre></code></li>
+<li><p>Написать класс, который регистрирует свои экземпляры и предоставляет интерфейс итератора по ним</p>
+<code><pre>&gt;&gt;&gt; x = Reg()
+&gt;&gt;&gt; x
+&lt;Reg instance at 0x98b6ecc&gt;
+&gt;&gt;&gt; y = Reg()
+&gt;&gt;&gt; y
+&lt;Reg instance at 0x98b6fec&gt;
+&gt;&gt;&gt; z = Reg()
+&lt;Reg instance at 0x98ba02c&gt;
+&gt;&gt;&gt; for i in Reg:
+...     print i
+&lt;Reg instance at 0x98b6ecc&gt;
+&lt;Reg instance at 0x98b6fec&gt;
+&lt;Reg instance at 0x98ba02c&gt;</pre></code>
+</li>
+</ol>
+
+<p>Написать юнит-тесты, за основу брать тесты выше, но не ограничиваясь ими.</p>
+
+<h3>Метаклассы и дескрипторы</h3>
+
+<p>Вопросы:</p>
+
+<ol>
+<li>Для чего используются, какие аргументы получают, что должны возвращать: методы  <code>__new__</code> и <code>__init__</code> классов</li>
+<li>Какие аргументы получает <code>__new__</code> и <code>__init__</code> у метакласса?</li>
+</ol>
+
+<p>Задания:</p>
+
+<ol>
+<li><p>Реализовать дескрипторы, которые бы фиксировали тип атрибута</p>
+
+<code><pre>&gt;&gt;&gt; class Image(object):
+...     height = Property(0)
+...     width = Property(0)
+...     path = Property('/tmp/')
+...     size = Property(0)</p>
+
+&gt;&gt;&gt; img = Image()
+&gt;&gt;&gt; img.height = 340
+&gt;&gt;&gt; img.height
+340
+&gt;&gt;&gt; img.path = '/tmp/x00.jpeg'
+&gt;&gt;&gt; img.path
+'/tmp/x00.jpeg'
+&gt;&gt;&gt; img.path = 320
+Traceback (most recent call last):
+  ...
+TypeError</pre></code>
+</li>
+
+<li><p>Реализовать базовый класс (используя метакласс), который бы фиксировал тип атрибута</p>
+<code><pre>&gt;&gt;&gt; class Image(Object):
+...     height = 0
+...     width = 0
+...     path = '/tmp'
+...     size = 0
+
+&gt;&gt;&gt; img = Image()
+&gt;&gt;&gt; img.height = 340
+&gt;&gt;&gt; img.height
+340
+&gt;&gt;&gt; img.path = '/tmp/x00.jpeg'
+&gt;&gt;&gt; img.path
+'/tmp/x00.jpeg'
+&gt;&gt;&gt; img.path = 320
+Traceback (most recent call last):
+  ...
+TypeError</pre></code>
+
+
+<li><p>Реализовать базовый класс (используя метакласс) и дескрипторы, которые бы на основе класса создавали SQL-схему (ANSI SQL) для модели:</p>
+
+<code><pre>&gt;&gt;&gt; class Image(Table):
+...     height = Integer()
+...     width = Integer()
+...     path = Str(128)
+
+&gt;&gt;&gt; print Image.sql()
+CREATE TABLE image (
+    height integer,
+    width integer,
+    path varchar(128)
+)</pre></code>
+
+<p>реализовывать <code>[NOT] NULL</code>, <code>PRIMARY KEY</code>, <code>FOREIGN KEY</code>, <code>CONSTRAINTS</code> не нужно. Достаточно реализации двух типов: <code>Integer</code> и <code>Str</code>.</p>
+</li>
+</ol>
+{% endmark %}

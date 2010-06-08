@@ -1,0 +1,108 @@
+{% meta %}
+    tags: [pylons, versions]
+    title: Pylons 0.9.6
+{% endmeta %}
+
+{% mark body %}
+Вышла новая версия веб-фреймворка <a href="http://www.pylonshq.com">Pylons</a>: <a href="http://cheeseshop.python.org/pypi/Pylons/0.9.6">0.9.6</a>. По changelog сложно выделить ключевые изменения, так что я просто расскажу, какие изменения пришлось сделать мне, чтобы перевести несложный проект с 0.9.4 до 0.9.6.
+
+<!--more-->
+<p>Мне не очень понравилась <a href="http://wiki.pylonshq.com/display/pylonsdocs/Upgrading">процедура обновления при помощи Paste</a>. Дело в том, что diff сложно окинуть одним взглядом, особенно когда файлы сильно различаются. Мне показалось проще создать новый проект по обновленному шаблону со схожим названием (для проекта MyProject я просто указал MyProject2 ;-)) и вручную сравнить нужные файлы.
+</p>
+<p>Итак, для автогенеренных файлов (которые у меня не сильно отличаются от шаблонных) у меня получилось так: 
+</p>
+<ul>
+ <li>
+     Замена <code>config/environment.py</code>
+ </li>
+
+ <li>
+     Замена <code>config/middleware.py</code>
+ </li>
+
+ <li>
+     Исправление <code>config/routing.py</code> (взял обновленный шаблон, добавил свои настройки путей)
+ </li>
+
+ <li>
+     Исправление <code>lib/base.py</code> (взял обновленный шаблон, добавил свой код в <code>BaseController</code>)
+ </li>
+
+ <li>
+     Исправление <code>lib/app_globals.py</code> (взял обновленный шаблон, добавил свой код в <code>Globals</code>)
+ </li>
+
+ <li>
+     Замена <code>controllers/error.py</code>
+ </li>
+
+ <li>
+     Замена <code>websetup.py</code>
+ </li>
+</ul>
+<p>Помимо этого, пришлось сделать кое-какие изменения в коде, в связи с:
+</p>
+<ul>
+ <li>
+     Теперь методы контролеров возвращают юникодные строки, а не Response-объекты (как следствие, нужно использовать <code>render</code> вместо <code>render_response</code> и убрать использование Response-объектов)
+ </li>
+
+ <li>
+     Response-объект стал глобальным
+ </li>
+
+ <li>
+     Используется собственная система доступа к настройкам (<code>pylons.config</code>), а не  из Paste (<code>paste.deploy.CONFIG</code>)
+ </li>
+</ul>
+<blockquote><p>Вот что мне сильно не понравилось в 0.9.6, так это сильный скачок в сторону. Обратной совместимости по указанным изменениям <strong>нет</strong> (по крайней мере, мне пришлось править код). Т.е. это не желательные, а обязательные изменения. Теперь <code>render_response</code> просто нет, теперь нельзя возвращать Response-объект, теперь не получится использовать <code>paste.deploy.CONFIG</code>.
+</p>
+</blockquote><p>Теперь чуть подробнее, о каждой правке:
+</p>
+
+<h3><code>render</code> вместо <code>render_response</code></h3>
+<p>Теперь вместо <code>render_response</code> нужно использовать <code>render</code>. С заменой всё легко и просто -- тупо заменяете все <code>render_response</code> на <code>render</code>.
+</p>
+<p>Было:
+</p>
+<pre><code>return render_response('/about.mak')
+</code></pre><p>Стало:
+</p>
+<pre><code>return render('/about.mak')
+</code></pre>
+<h3><code>response</code> - глобальный</h3>
+<p>Если вы раньше использовали Response-объект (для того, чтобы установить cookie, или чтобы вернуть ответ с нужным Content-Type), то теперь нужно использовать глобальный <code>response</code>-объект:
+</p>
+<p>Было:
+</p>
+<pre><code>return Response(feed.content.encode('utf-8'), 'application/rss+xml')
+</code></pre><p>Стало:
+</p>
+<pre><code>response.content_type = 'application/rss+xml'
+return feed.content.encode('utf-8')
+</code></pre><p>И здесь я, конечно, не могу согласиться с разработчиками Pylons. Я могу понять <a href="http://adam.gomaa.us/blog/django-magic-pylons-magic/">причины, когда request-объект делается глобальным</a> (см. комментарий Бена Бангерта), но я не могу понять мотивов к <a href="http://pylonshq.com/project/pylonshq/ticket/268">глобализации response-объекта</a>. Если ранее я просто мог заглянуть в код <code>lib/base.py</code>, посмотреть откуда импортируется <code>Response</code>, посмотреть код этого объекта, мог посмотреть методы и атрибуты этого объекта при интерактивной отладке; то теперь я не могу этого сделать: ввиду глобальности, используются трюки (к примеру, <code>response</code> это объект типа <code>StackedObjectProxy</code>), чтобы этот объект был локальным для каждого потока.
+</p>
+
+<h3>Собственная система конфигурации</h3>
+<p>Теперь все опции (глобальные, специфичные для приложения, служебные) доступны из <code>pylons.config</code>. Если ранее вы использовали <code>paste.deploy.CONFIG</code>, то придется исправлять:
+</p>
+<p>Было:
+</p>
+<pre><code>from paste.deploy.config import CONFIG
+
+conf = CONFIG['global_conf'].copy()
+conf.update(CONFIG['app_conf'])
+
+mail_from = conf.get('info_email_from', 'msg@localhost')
+</code></pre><p>Стало:
+</p>
+<pre><code>from pylons import config
+
+mail_from = config.get('info_email_from', 'msg@localhost')
+</code></pre><p>Помимо избавления от разделения глобальные настройки/специфичные для приложения, мне понравилось, что теперь доступ к маршрутам Routes доступен из настроек, а не только из <code>environ</code>.
+</p>
+
+<h3>Финал</h3>
+<p>После указанных изменений, приложение, написанное на Pylons 0.9.4, стало работать на 0.9.6. По тексту, я думаю, стало понятно, что я негативно отношусь к замене локального <code>Response</code> на глобальный <code>response</code>. Остальные изменения меня вполне устроили.
+</p>
+{% endmark %}

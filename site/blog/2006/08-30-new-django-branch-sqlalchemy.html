@@ -1,0 +1,19 @@
+{% meta %}
+    tags: [links, django, sqlalchemy]
+    title: Новая ветка Django - SQLAlchemy
+{% endmeta %}
+
+{% mark body %}
+Джеймс Бенетт не устает радовать хорошими новостями: теперь в Django <a href="http://www.b-list.org/weblog/2006/08/29/best-all-worlds">появилась поддержка SQLAlchemy</a>.
+
+<!--more-->
+
+Даю слово автору:
+<blockquote>
+Время от времени в почтовом списке рассылки Django выражают недовольство, что в ORM (object-relational mapping) нет необходимых вещей. И это правда, есть некоторые экзотичные и/или навороченные вещи, которые он (ORM) не умеет делать. Обычно люди сравнивают его с <a href="http://www.sqlalchemy.org">SQLAlchemy</a>, который, к несчастью, весьма сложен в освоении и использовании. Еще одна похожее - и неверное - недовольство тем, что при возможном использовании Django с SQLAlchemy потеряется "админка" (не потеряется - использовать "админку", в то время как ваши собственные виды (view) будут использовать другой ORM, или даже другой фреймворк, весьма просто).
+
+Так и так, обе жалобы теперь не имеют смысла: <a href="http://code.djangoproject.com/browser/django/branches/sqlalchemy">новая ветка Django</a>, созданная несколько часов назад, добавляет <a href="http://groups.google.com/group/django-developers/browse_thread/thread/5149e1c60dc65bff/a177bb34cfde1ec7">официальную поддержку SQLAlchemy</a> через ‘contrib’. Согласно планам, озвученным Адрианом и Робином, слой совместимости с SQLAlchemy будет в <code>django.contrib.sqlalchemy</code> и Вы сможете легко выбирать какой ORM использовать в своем приложении.
+
+Смотря на увеличивающуюся популярность как Django, так SQLAlchemy (я не буду удивлен, если он станет "золотым стандартом" Python ORM), я считаю, что это большая победа для всех.
+</blockquote>
+{% endmark %}

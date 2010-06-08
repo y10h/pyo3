@@ -1,0 +1,268 @@
+{% meta %}
+    tags: [wsgi, docs, paste]
+    title: WSGI, Paste
+{% endmeta %}
+
+{% mark body %}
+<p>Продолжим работать с <a href="http://www.pyobject.ru/blog/post/wsgi-the-intro/">WSGI</a>. Сегодня поговорим о <a href="http://pythonpaste.org/">Paste</a>. 
+</p>
+
+<!--more-->
+
+
+<p>Когда заходит разговор о Paste, возникает проблема определения. Достаточно сложно одним-двумя словами сказать что же такое Paste. Набор WSGI-компонент и middleware... Если человек не особо плотно работает с WSGI, то это ему ничего не скажет. Бен Бангерт в своем <a href="http://www.groovie.org/articles/2006/09/18/wsgi-paste-pylons-and-all-that">выступлении на Google Tech Talks</a> называет Paste &quot;те компоненты, функционал которых обычно ожидают от фреймворка&quot;, &quot;набор компонент, слишком мелких для выделения в отдельные пакеты&quot;.
+
+</p>
+<p>Давайте на простых примерах разберемся что такое Paste, что умеет и зачем нужен. Paste состоит из трех частей: собственно <a href="http://pythonpaste.org/">Paste</a>, <a href="http://pythonpaste.org/deploy/">PasteDeploy</a> и <a href="http://pythonpaste.org/script/">PasteScript</a>. Сегодня будем разговаривать о &quot;просто Paste&quot;.
+</p>
+
+<h1>Необходимое предисловие</h1>
+<p>Для демонстрации Paste мы будем использовать 
+   простейшее WSGI-приложение, либо небольшие его вариации:
+</p>
+
+<pre><code>def sample_app(environ, start_response):
+    start_response('200 OK', [('Content-type', 'text/html')])
+    sorted_keys = sorted(environ.keys())
+    content = ['&lt;html&gt;&lt;body&gt;&lt;h1&gt;TrivialWSGIApp in action&lt;/h1&gt;'] + &#92;
+             ['&lt;p&gt;Sample WSGI application. Just show your environment.&lt;/p&gt;&lt;p&gt;&lt;ul&gt;'] + &#92;
+             ['&lt;li&gt; %s : %s&lt;/li&gt;' % (str(k), str(environ[k])) for k in sorted_keys] + &#92;
+             ['&lt;/ul&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;']
+    return content
+
+</code></pre><p>Ну и прежде чем приступить, установим Paste (он активно использует возможности setuptools и сам распространяется в виде egg, так что лучше если вы <a href="http://www.pyobject.ru/blog/post/understanding-eggs-entrypoints/">заранее настроите easy_install</a>)
+</p>
+<pre><code>$ easy_install Paste
+</code></pre>
+<h1>Сервер</h1>
+<p>Во-первых, Paste предоставляет сервер для работы с WSGI-приложениями. Естественно, может использоваться как на месте разработчика (чтобы не &quot;тащить&quot; за собой Apache, Lighttpd или Nginx), так и при развертывании (он достаточно быстр).
+</p>
+<p>Что ж, давайте попробуем.
+</p>
+<pre><code>&gt;&gt;&gt; from paste import httpserver
+
+&gt;&gt;&gt; httpserver.serve(sample_app, host='127.0.0.1', port=5000)
+serving on http://127.0.0.1:5000
+</code></pre><p>Вуаля...
+</p>
+<blockquote><p>Сервер Paste сделан на основе BaseHTTPServer и если у вас есть &quot;своя&quot; реализация сервера, наследованная от BaseHTTPServer, то Paste дает возможность более-менее просто сделать свой сервер WSGI-совместимым. Для этого следует воспользоваться WSGIHandlerMixIn.
+</p>
+</blockquote>
+<h1>Диспетчеризация</h1>
+
+<h3>Каскад</h3>
+<p>Каскад приложений. Из каскада возвращается первый не-ошибочный ответ.
+</p>
+
+<p>Например, есть некое приложение, которое будет возвращать ошибку 404, если в пути
+   не будет присутствовать foo.
+</p>
+<pre><code>def foo_app(environ, start_response):
+    if 'foo' in environ['PATH_INFO']:
+        start_response('200 OK', [('Content-type', 'text/html')])
+        content = ['&lt;html&gt;&lt;body&gt;&lt;h1&gt;Foo app&lt;/h1&gt;'] + &#92;
+                  ['&lt;p&gt;We\'ve found &lt;code&gt;foo&lt;/code&gt; in path&lt;/p&gt;']
+    else:
+        start_response('404 Not found', [('Content-type', 'text/html')])
+        content = ['&lt;html&gt;&lt;body&gt;&lt;h1&gt;404: Not found&lt;/h1&gt;'] + &#92;
+                  ['&lt;p&gt;Foo not found in path&lt;/p&gt;']
+    return content
+
+</code></pre><p>И наше <code>sample_app</code>. Если мы составим такой каскад:
+</p>
+<pre><code>from paste import cascade
+cascaded = cascade.Cascade([foo_app, sample_app], catch=(404,500))
+</code></pre><p>То если <code>foo_app</code> вернет 404, то запрос будет обслужен <code>sample_app</code>. По умолчанию <code>Cascade</code> перехватывает именно 404, однако можно указать и другие, например 500. Это позволяет организовывать различного рода &quot;умные&quot; обработчики ошибок.
+
+</p>
+
+<h3>Префиксы</h3>
+<p>Если каскад это аналог списка или кортежа, то префиксы - аналог словаря. В зависимости от префикса запрос обслуживается либо одним, либо другим приложением.
+</p>
+<pre><code>from paste import urlmap
+
+mapping = urlmap.URLMap()
+mapping['/foo'] = foo_app
+mapping['/bar'] = sample_app
+</code></pre><p>Теперь URLы, начинающиеся с 'foo' будет обслуживать <code>foo_app</code>, а начинающиеся с 'bar' - приложение <code>sample_app</code>
+   Заметьте одну особенность: если вы пойдете по URL http://127.0.0.1:5000/foo, то приложение <code>foo_app</code> ругнется, что foo нет в пути. И действительно, Paste &quot;вырезает&quot; префикс из пути (PATH_INFO). И это правильно.
+
+</p>
+<p>Префиксы полезны, когда вы в один сайт вставляете несколько WSGI-приложений. Например, форум и блог.
+</p>
+
+<h4>Обработчики ошибок</h4>
+<p>Если не нужно &quot;хитрых&quot; обработчиков, а нужно просто делать редиректы на страницы с ошибками, то в этом вам поможет <code>errordocument</code>.
+</p>
+<pre><code>from paste import fileapp, urlmap, errordocument
+
+def err404_app(environ, start_response):
+    start_response('200 OK', [('Content-type', 'text/html')])
+    return [&quot;&lt;html&gt;&lt;body&gt;&lt;h1&gt;Err 404: Object not found in %s&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;&quot; % environ['paste.recursive.old_path_info']]
+
+mapping = urlmap.URLMap()
+mapping['/foo'] = foo_app
+mapping['/err404'] = err404_app
+
+error_handled = errordocument.forward(mapping, codes={404:'/err404'})
+
+</code></pre><p>Отметим, что обработчик должен возвращать ответ 200 OK, а иначе будет зацикливание обработчиков. Стоит обратить внимание, что в переменных окружения фиксируются операции, проводимые paste. В частности, можно получить значение переменной окружения <code>PATH_INFO</code> до редиректа. Упомянем еще одну особенность: при запросе <code>/foo</code>, <code>PATH_INFO</code> будет пустым, поскольку paste имитирует корень для приложения <code>foo_app</code>. Это сделано затем, чтобы приложение обрабатывало только свой &quot;кусок&quot; URL'а.
+</p>
+
+<h1>Инструменты</h1>
+
+<h3>Запросы и ответы (request/response)</h3>
+<p>Удобные обертки для запросов и ответов. 
+</p>
+<pre><code>from paste import wsgiwrappers
+
+def advanced_app(environ, start_response):
+    request = wsgiwrappers.WSGIRequest(environ)
+
+    response = wsgiwrappers.WSGIResponse(&quot;&lt;html&gt;&lt;body&gt;&lt;h1&gt;Advanced WSGI app in action&lt;/h1&gt;&quot;)
+    response.write(&quot;&lt;p&gt;Your preferred languages are: %s&lt;/p&gt;&quot; % request.languages)
+    response.write(&quot;&lt;p&gt;Params of your query are: %s&lt;/p&gt;&quot; % request.params)
+    response.write(&quot;&lt;/html&gt;&lt;/body&gt;&quot;)
+
+    return response(environ, start_response)
+
+</code></pre><p>Код говорит сам за себя. С такими объектами гораздо удобней работать, чем с &quot;голым WSGI&quot;.
+</p>
+
+<h3>Тестирование</h3>
+<p>Paste предоставляет простой интерфейс для тестирования WSGI-приложений. Используя <code>paste.fixture</code>, делаем тест-обертку для приложения, и работаем уже с этой оберткой:
+</p>
+<pre><code>from paste import fixture
+import unittest
+
+def testing_app(environ, start_response):
+    start_response('200 OK', [('Content-Type', 'text/plain'),
+                              ('X-Powered-By', 'Python Paste')])
+    return [&quot;Paste is a collection of useful tools for WSGI&quot;]
+
+class WSGIAppTestCase(unittest.TestCase):
+    def setUp(self):
+        self.test_app = fixture.TestApp(testing_app)
+
+    def test_headers(self):
+        response = self.test_app.get('/path/to/url')
+        self.assertEquals(response.header('X-Powered-By'), 'Python Paste')
+
+    def test_content(self):
+        response = self.test_app.get('/path/to/url')
+        # similar to response.mustcontain('WSGI'), but more pythonic
+        self.assert_('WSGI' in response)
+</code></pre><p>Тут же упомяну и <code>paste.lint.middleware</code> - middleware, проверяющая корректность реализации WSGI.
+
+</p>
+
+<h1>Отладка</h1>
+<p>Paste дает возможность вылавливать ошибки самыми различными способами
+</p>
+
+<h3><code>paste.exceptions</code></h3>
+<p>Отлов ошибок и показ traceback либо в браузере (при отладке), либо письмом.
+</p>
+<pre><code>from paste.exceptions import errormiddleware
+
+def erroneous_app(environ, start_response):
+    if environ['PATH_INFO'] == '/error':
+        raise Exception(&quot;Some error occured here&quot;)
+
+    start_response('200 OK', [('Content-Type', 'text/html')])
+    return ['&lt;html&gt;&lt;body&gt;&lt;h1&gt;Erroreous application&lt;/h1&gt;'] + &#92;
+           ['&lt;p&gt;Go to &lt;a href=&quot;/error&quot;&gt;/error&lt;/a&gt; to see exception&lt;/p&gt;'] + &#92;
+           ['&lt;/body&gt;&lt;/html&gt;']
+
+app = errormiddleware.ErrorMiddleware(erroneous_app, debug=True)
+
+</code></pre>
+<h3><code>paste.cgitb_catcher</code></h3>
+<p>Любители фиолетовых страниц ошибок в стиле <code>cgitb</code> могут получать их для WSGI-приложений средствами <code>paste.cgitb_catcher</code>.
+</p>
+<pre><code>from paste import cgitb_catcher
+app = cgitb_catcher.CgitbMiddleware(erroneous_app, display=True)
+</code></pre>
+<h3><code>paste.evalexception</code></h3>
+<p>Результат работы этого middleware сильно похож на <code>paste.exceptions</code>, но с одним большим плюсом: в нем есть интерактивная Python-консоль, так что вы можете более подробно изучить причины ошибки.
+
+</p>
+<pre><code>from paste import evalexception
+app = evalexception.EvalException(erroneous_app)
+</code></pre>
+<h3>Профилирование</h3>
+<p>При помощи <code>paste.debug.profile</code> мы можем &quot;на лету&quot; отпрофилировать приложение и сразу же посмотреть результаты в веб-браузере.
+</p>
+<pre><code>from paste.debug import profile
+app = profile.ProfileMiddleware(sample_app, None)
+</code></pre>
+<h3>Показ print'ов на странице</h3>
+
+<p>Интересный middleware - &quot;отлавливает&quot; print'ы и показывает их на странице. Примерно так:
+</p>
+<pre><code>from paste.debug import prints
+
+def sample_app_prints(environ, start_response):
+    print &quot;start response with 200 OK status&quot;
+    start_response('200 OK', [('Content-type', 'text/html')])
+    print &quot;retrieve environ keys&quot;
+    sorted_keys = environ.keys()
+    print &quot;sort keys&quot;
+    sorted_keys.sort()
+    print &quot;construct content&quot;
+
+    content = ['&lt;html&gt;&lt;body&gt;&lt;h1&gt;Trivial WSGI app in action&lt;/h1&gt;'] + &#92;
+              ['&lt;p&gt;Sample WSGI application. Just show your environment.&lt;/p&gt;&lt;p&gt;&lt;ul&gt;'] + &#92;
+              ['&lt;li&gt; %s : %s&lt;/li&gt;' % (str(k), str(environ[k])) for k in sorted_keys] + &#92;
+              ['&lt;/ul&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;']
+    print &quot;return content&quot;
+
+    return content
+
+app = prints.PrintDebugMiddleware(sample_app_prints)
+</code></pre>
+<h1>Еще...</h1>
+<p>В Paste помимо всего вышеописанного есть:
+</p>
+<ul>
+ <li>
+     Работа с WSGI-переменными из environ в <code>paste.request</code>
+ </li>
+ <li>
+     Представление cgi-приложений как WSGI в <code>paste.cgiapp</code>
+ </li>
+ <li>
+     Представление любого HTTP-приложения как WSGI в <code>paste.proxy</code>
+ </li>
+ <li>
+     Обработка исключений (напр. HTTPNotFound) в правильные HTTP-ответы в <code>paste.httpexceptions</code>
+ </li>
+ <li>
+     Управление сессиями в <code>paste.session</code> и <code>paste.flup_session</code>
+ </li>
+ <li>
+     Сжатие на лету трафика средствами <code>paste.gzipper</code>
+ </li>
+ <li>
+     Журнал обращений в стиле Apache в <code>paste.translogger</code>
+ </li>
+ <li>
+     Управление глобальными переменными в <code>paste.registry</code>, thread-safe
+ </li>
+ <li>
+     Различного рода аутентификации (в том числе и с поддержкой OpenID) в <code>paste.auth</code>
+ </li>
+ <li>
+     Монитор изменений (перезагружает сервер при изменении контролируемого кода) в <code>paste.reloader</code>
+ </li>
+ <li>
+     ... и кое-что еще
+ </li>
+</ul>
+
+<h1>Итог</h1>
+<p>Paste - это &quot;кирпичики&quot;, из которых можно строить свое приложение или фреймворк (<a href="http://www.pylonshq.com">Pylons</a>, <a href="http://rhubarbtart.org">RhubarbTart</a>, <a href="http://www.cleverharold.org">CleverHarold</a> поступают именно так). Ряд интересных middleware (то же самое профилирование) вы можете использовать не только с этими фреймворками (где все компоненты - WSGI-совместимы) или с собственным WSGI-приложенем, но и с Django, где WSGI - это внешний интерфейс.
+</p>
+<p>Полный код всех примеров, как всегда, можно найти на <a href="http://pythy.googlecode.com/svn/trunk/wsgi_paste/">code.google.com</a>.
+</p>
+{% endmark %}

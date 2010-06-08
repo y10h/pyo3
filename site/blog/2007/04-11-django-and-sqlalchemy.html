@@ -1,0 +1,151 @@
+{% meta %}
+    tags: [sqlalchemy, django, trial]
+    title: Django и SQLAlchemy
+{% endmeta %}
+
+{% mark body %}
+<p>В августе мы с вами говорили о <a href="http://www.pyobject.ru/blog/post/new-django-branch-sqlalchemy/">создание новой ветки</a> в Django для поддержки SQLAlchemy. Спустя более чем полгода я с сожалением констатирую факт, что в этой ветке SQLAlchemy и не пахнет.
+</p>
+
+<!--more-->
+
+
+<p>Самый быстрый способ использования SQLAlchemy в Django - описать свои модели в SQLAlchemy-терминах. 
+</p>
+<p>Давайте рассмотрим на примере кода из <a href="http://www.pyobject.ru/blog/post/results-of-django-live-tutorial/">Django Live Tutorial</a>. Для тех, кто не присутствовал на этом мероприятии, поясню, что это модельный веб-сервис для скачивания файлов по cron'у. Оригинальный код можно посмотреть <a href="http://pythy.googlecode.com/svn/trunk/django_live_tutorial/code/">здесь</a>.
+
+</p>
+<p>Напомню, как выглядит оригинальная модель:
+</p>
+<pre><code>from django.db import models
+import datetime
+
+class DownloadItem(models.Model):
+
+    class Admin:
+        pass
+
+    class Meta:
+        get_latest_by = 'added_at'
+
+    url = models.CharField(maxlength=255, null=False)
+    added_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.url
+
+    def is_started(self):
+        return self.started_at is not None and datetime.datetime.now() &gt; self.started_at
+
+    def is_finished(self):
+        return self.finished_at is not None and datetime.datetime.now() &gt; self.finished_at
+</code></pre><p>Давайте теперь в нашем приложении (<code>dlt.downloader</code>) создадим описание модели для SQLAlchemy, <code>dlt.downloader.sa_models</code>:
+</p>
+<pre><code>import datetime
+import sqlalchemy as sa
+from django.conf import settings
+
+meta = sa.BoundMetaData(settings.SQLALCHEMY_DB_URI)
+
+download_item_table = sa.Table('downloader_downloaditem', meta, autoload=True)
+
+class DownloadItem(object):
+
+    def __str__(self):
+        return self.url
+
+    def __repr__(self):
+        return &quot;%s(%s)&quot; % (self.__class__.__name__, self.url)
+
+    def is_started(self):
+        return self.started_at is not None and datetime.datetime.now() &gt; self.started_at
+
+    def is_finished(self):
+        return self.finished_at is not None and datetime.datetime.now() &gt; self.finished_at
+
+orm.mapper(DownloadItem, download_item_table)
+
+</code></pre><p>Здесь всё привычно и обычно для тех, кто читал <a href="http://www.sqlalchemy.org/docs/">документацию по SQLAlchemy</a>. Единственно, что обращу ваше внимание на параметр <code>SQLALCHEMY_DB_URI</code>, который нужно указать в <code>settings.py</code>.
+</p>
+<p>Теперь напишем простенькую вьюшку с использованием SQLAlchemy ORM:
+</p>
+<pre><code>from sqlalchemy import orm
+from django.shortcuts import render_to_response
+from dlt.downloader.models_sa import DownloadItem
+
+def list_items(request);
+    dbsession = orm.create_session()
+    query = dbsession.query(DownloadItem)
+    items = query.select()
+    context = {'items': items}
+    return render_to_response('list_items.html')
+</code></pre><p>Вроде всё правильно. Добавляем в <code>urls.py</code> нашу новую вьюшку и пробуем...
+</p>
+<p>Для разминки на SQLAlchemy ORM сделаем и &quot;качалку&quot;:
+
+</p>
+<pre><code>import os
+import time
+import datetime
+
+os.environ['DJANGO_SETTINGS_MODULE'] = 'dlt.settings'
+
+from sqlalchemy import orm
+from dlt.downloader.models_sa import DownloadItem
+
+dbsession = orm.create_session()
+query = dbsession.query(DownloadItem)
+
+for item in query.select_by(started_at=None):
+    print u&quot;Начинаем качать с %s&quot; % item.url
+    item.started_at = datetime.datetime.now()
+    dbsession.flush()
+    time.sleep(10)
+    print u&quot;Закончили качать с %s&quot; % item.url
+    item.finished_at = datetime.datetime.now()
+    dbsession.flush()
+</code></pre><p>Всё достаточно просто и понятно.
+</p>
+<p>Давайте оглянемся назад и посмотрим, что же у нас получилось... Настройки дублируются (нужно указывать параметры БД как для Django ORM, так и для SQLAlchemy), код дублируется (модели описываются и для Django ORM, и для SQLAlchemy). 
+</p>
+<p>Эти проблемы можно решить так:
+</p>
+<ol>
+ <li>
+     Сконвертировать параметры БД из Django в SQLAlchemy
+ </li>
+ <li>
+     Имя таблицы, которое явно указывается в SQLAlchemy, можно узнать из Django: <code>models.DownloadItem._meta.db_table</code>.
+ </li>
+ <li>
+     По идее, можно &quot;маппить&quot; SQLAlchemy ORM к Django-моделям (правда, я не гарантирую отсутствия &quot;наводок&quot; между Django ORM и SQLAlchemy, так что действуйте на свой страх и риск).
+ </li>
+</ol>
+<p>В итоге, учитывая эти соображения, получаем такой код:
+</p>
+<pre><code>import sqlalchemy as sa
+import sqlalchemy.orm as orm
+from django.conf import settings
+
+from dlt.downloader.models import DownloadItem
+
+def get_db_uri():
+    ...
+    # составляем URI из параметров Django
+    # не особо интересно
+    # так что пропустим реальный код
+
+meta = sa.BoundMetaData(get_db_uri())
+
+download_item_table = sa.Table(DownloadItem._meta.db_table, meta, autoload=True)
+
+orm.mapper(DownloadItem, download_item_table)
+</code></pre><p>Полный код, как всегда, - на <a href="http://pythy.googlecode.com/svn/trunk/django_sqlalchemy/">code.google.com</a>
+</p>
+
+<h2>Перспективы</h2>
+<p>Выше упомянутая ветка в репозитории Django имеет шансы на второе дыхание: <a href="http://blog.case.edu/bmb12/2007/03/thinking_about_taking_over_the_djangosqlalchemy_branch">Брайан Бек горит желанием</a> более плотно интегрировать SQLAlchemy и Django. Пожелаем ему удачи и будем верить, что его энтузиазма хватит на больше чем сделать еще одну ветку в Subversion-репозитории.
+</p>
+{% endmark %}

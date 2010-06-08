@@ -1,0 +1,197 @@
+{% meta %}
+    tags: [lighttpd, reviews, modpython, nginx, deploy, apache, wsgi, twisted, cherrypy]
+    title: Развертываем WSGI приложение...
+{% endmeta %}
+
+{% mark body %}
+<p>Статья, обобщение которой войдет в <a href="http://www.rupy.ru/member/5/#paper-5">доклад для RuPyRu2007</a>.
+</p>
+<p>Итак, вопрос развертывание WSGI-приложений. Тема, а особенно на русском, не особенно развита. Краткий обзор решений.
+</p>
+
+<!--more-->
+
+
+
+<h2>mod_python</h2>
+<p>Скорость: 5<br>
+   Удобство: 4
+</p>
+
+<img src="http://gorod-omsk.ru/blog/pythy/files/2007/02/mod_python.png" alt="WSGI-app -&gt; wsgi-modpy-handler -&gt; mod_python (apache)" />
+
+<p>Один из самых быстрых методов развертывания WSGI-приложений - apache+mod_python. В этом случае все приложение и все зависимые модули загружаются в память, чем и достигается максимальное быстродействие. Существует ряд модулей (<a href="http://projects.amor.org/misc/svn/modpython_gateway.py">~1</a>, <a href="http://trac.pocoo.org/wiki/ModPyWsgi">~2</a>, <a href="http://trac.gerf.org/pse/wiki/WSGIHandler">~3</a>, <a href="http://www.aminus.org/blogs/index.php/fumanchu/2005/08/11/wsgi_wrapper_for_mod">~4</a>), преобразовывающие WSGI-протокол в формат обработчика mod_python. Конфигурационный файл для всех модулей примерно одинаков и выглядит так:
+</p>
+<pre><code>&lt;VirtualHost *&gt;
+
+    &lt;Location /wsgi&gt;
+        SetHandler mod_python
+        # конвертер wsgi &lt;-&gt; mod_python
+        PythonHandler modpython_gateway::handler 
+        # в зависимости от конвертера, либо application, либо wsgi.application
+        # т.е. запускаемое wsgi-приложение
+        PythonOption wsgi.application testapp::app
+    &lt;/Location&gt;
+
+&lt;/VirtualHost&gt;
+</code></pre><p>Конвертер указывается опцией <code>PythonHandler</code>, а запускаемое приложение - <code>PythonOption wsgi.application</code> (зависит от модуля-конвертера).
+
+</p>
+<p>Из недостатков можно отметить большой объем потребляемой памяти, как следствие, статику желательно отдавать либо &quot;легким&quot; apache, либо nginx/lighttpd. Т.е. сложность настроек растет, что не радует.
+</p>
+
+<h2>FastCGI</h2>
+
+<img src="http://gorod-omsk.ru/blog/pythy/files/2007/02/fast_cgi.png" alt="WSGI-app -&gt; flup -&gt; httpd (apache, nginx, lighttpd)" />
+
+<p>Здесь основная идея в том, что FastCGI сервер (<a href="http://trac.saddi.com/flup">flup</a>) загружает интерпретатор и все зависимые модули приложения и принимает запросы от фронтенд-сервера (apache, lighttp, nginix), не запуская интерпретатор заново.
+
+</p>
+<p>Иными словами, запущено два сервиса: FastCGI-сервер и http-сервер. Http-сервер отдает статику и перенаправляет запросы на динамику к FastCGI-серверу, который их и обрабатывает.
+</p>
+<p>Прежде настройки фронтенд-сервера нужно обеспечить поддержку FastCGI со стороны приложения. Как сказано выше, это достигается использованием flup - сервера FastCGI на Python. Он может обрабатывать запросы как в threaded режиме, так и в preforked. Скрипт для запуска FastCGI сервера с WSGI-приложением выглядит примерно так:
+</p>
+<pre><code>from testapp import app
+from flup.server.fcgi import WSGIServer # threaded
+
+WSGIServer(app, bindAddress=('/tmp/fcgi_wsgi.socket')).run()
+</code></pre>
+<h4>FastCGI+Apache</h4>
+<p>Скорость: 2<br>
+   Удобство: 2
+</p>
+<p>Чем неприятно удивил mod_fcgi, так это:
+</p>
+<ul>
+ <li>
+     необходимостью прописывать для fcgi-сервера <em>абсолютный путь</em> вне определения VirtualHost
+ </li>
+ <li>
+     скоростью - аналогичные решения с nginx/lighttpd дают бОльшую скорость
+ </li>
+</ul>
+<p>В целом, я не вижу целевой аудитории apache+mod_fastcgi: если уже стоит apache, то есть смысл использовать mod_python, а если уж использовать FastCGI, то в качестве фронтенда резонно брать более легкий сервер - или nginx, или lighttpd.
+</p>
+
+<p>В любом случае, конфиг таков:
+</p>
+<pre><code>NameVirtualHost *
+FastCGIExternalServer /var/www/wsgi.fcgi -socket /tmp/fcgi_wsgi.socket
+&lt;VirtualHost *&gt;
+    RewriteEngine On
+    RewriteRule ^/wsgi/(.*)$ /wsgi.fcgi/$1 [QSA,L]
+&lt;/VirtualHost&gt;
+</code></pre><p>Еще раз отмечу, что FastCGI-сервер определяется <em>вне</em> виртуального хоста и для него указывается <em>абсолютный путь</em>, а для rewrite-правил используется <em>относительный путь</em> к fcgi.
+
+</p>
+<blockquote><p>FastCGI может &quot;общаться&quot; с фронтенд-севером либо через unix socket, либо через tcp. В первом случае чуть быстрее, во втором - более гибко (в общем случае. FastCGI может быть на другой машине), подробности см. у <a href="http://blog.kovyrin.net/2006/08/28/ruby-performance-results/">Ковырина</a>. Конфиги особо не отличаются, но для единообразия я указываю настройки для unix socket.
+</p>
+</blockquote>
+<h4>FastCGI+lighttpd</h4>
+<p>Скорость: 4<br>
+   Удобство: 4
+</p>
+<p>Помимо того, что с lighttpd FastCGI работает быстрей, с ним еще и удобней работать - есть возможность создавать отдельные конфиги для конкретных WSGI-приложений. Например, общий файл настроек lighttpd может не включать настроек для модуля mod_fastcgi, но отдельный конфиг может изменить это, что-то вроде такого:
+
+</p>
+<pre><code>server.modules   += ( &quot;mod_fastcgi&quot;, &quot;mod_rewrite&quot; )
+
+fastcgi.server    = ( &quot;/wsgi.fcgi&quot; =&gt; 
+    (
+         &quot;wsgi&quot; =&gt; (
+            &quot;socket&quot; =&gt; &quot;/tmp/fcgi_wsgi.socket&quot;,
+            &quot;check-local&quot; =&gt; &quot;disable&quot;
+
+        )
+    )
+)
+
+url.rewrite                   = ( &quot;^/wsgi/(.*)&quot; =&gt; &quot;/wsgi.fcgi/$1&quot;)
+</code></pre>
+<h4>FastCGI+nginx</h4>
+<p>Скорость: 4<br>
+   Удобство: 4
+</p>
+<p>Что касается nginx vs. lighttpd, то здесь, IMHO, уже играют личные предпочтения да нюансы использования. Что касается моего мнения, то мне nginx чуть больше нравится.
+
+</p>
+<p>Для секции server я использую (у меня стоит <a href="http://deb.wapper.ru/nginx/">сборка Павла Аммосова для Debian</a>) примерно такие параметры для запуска WSGI-приложения через FastCGI:
+</p>
+<pre><code>location /wsgi {
+    fastcgi_pass    unix:/tmp/fcgi_wsgi.socket;
+    fastcgi_intercept_errors    off;
+    include fastcgi_params;
+}
+</code></pre><p>По скорости FastCGI nginx примерно равен lighttpd. Да и конфиги похожи. Так что вопрос выбора между nginx и lighttpd - дело вашего вкуса.
+</p>
+
+<h2>Python-решения</h2>
+<p>Существует несколько pure Python WSGI-серверов. У каждого из них свой способ запуска. Для того, чтобы унифицировать и упростить развертывание, <a href="http://blog.ianbicking.org/">Ян Бикинг</a> создал <a href="http://pythonpaste.org/">Paste</a>. Использование Paste выходит за рамки данного обзора (тем не менее, в будущем я обязательно коснусь этой темы). Так что я приведу &quot;низкоуровневый&quot; способ запуска WSGI-приложений для наиболее интересных pure Python решений.
+
+</p>
+<p>Есть один нюанс, который стоит помнить - помимо отдачи динамического контента, нужно еще отдавать и статику, так что если выбранное решение этого не умеет , вам понадобится отдельный http-сервер. Если нужен Python powered httpd - возьмите <a href="http://cheeseshop.python.org/pypi/apricot">apricot</a>. Он, конечно же, проигрывает по скорости таким серверам как apache/lighttpd/nginx, однако компенсирует гибкостью и простотой.
+</p>
+
+<h3>Twisted</h3>
+<p>Скорость: 2<br>
+   Удобство: 5
+</p>
+<p><a href="http://twistedmatrix.com/trac/wiki/TwistedWeb2">Twisted Web2</a> показывает весьма приличную скорость - даже чуть выше чем у Apache+FastCGI. Twisted Web2 выглядит вполне достойным кандидатом для использования для средненагруженных серверах. Скорость отдачи статики, конечно же, не может сравниться с apache/lighttpd/nginx, но зато вам не нужно настраивать отдельный сервер (особенно, если Twisted уже используется как платформа для сетевых сервисов). И еще - это Python, так что вы можете отдавать статику так <a href="http://softwaremaniacs.org/blog/2007/01/08/controlled-download-2/">как вам нужно</a>, например, с хитрой авторизацией.
+
+</p>
+<p>Итак, пример tac (tac - twisted app config) для запуска WSGI-приложения <code>testapp.app</code>:
+</p>
+<pre><code>from twisted.application import service, strports
+from twisted.web2 import wsgi, channel, server
+
+from testapp import app as wsgi_app
+
+application = service.Application('Twisted WSGI/Nevow test')
+
+wsgi_site = server.Site(wsgi.WSGIResource(wsgi_app))
+wsgi_httpd = strports.service('tcp:8080', channel.HTTPFactory(wsgi_site))
+wsgi_httpd.setServiceParent(application)
+</code></pre>
+<h3>CherryPy</h3>
+<p>Скорость: 5+<br>
+   Удобство: 4
+</p>
+<p>CherryPyWSGIServer - феноменально быстрый WSGI-сервер. Быстрее, чем mod_python! Что интересно, <code>cherrypy.wsgiserver</code> фактически не зависит от остальных компонент <a href="http://cherrypy.org/">CherryPy</a> и доступен в виде <a href="http://www.cherrypy.org/browser/trunk/cherrypy/wsgiserver/__init__.py">отдельного модуля</a>. Запуск производится следующим способом:
+
+</p>
+<pre><code>from cherrypy import wsgiserver
+from testapp import app
+
+wsgi_apps = [('/wsgi', app)]
+
+wsgiserver.CherryPyWSGIServer(('', 8080), wsgi_apps).start()
+</code></pre><p>CherryPy как и Twisted умеет отдавать статику (Twisted даже чуть быстрей), но лучше это делать при помощи отдельного сервера. Да, я не оговорился, CherryPy обрабатывает WSGI быстрей, чем отдает статику, причем разница - в два-три раза.
+</p>
+
+<h2>Итоги</h2>
+<p>Для интранета я бы рекомендовал Twisted Web2 - качественное, &quot;всё включено&quot;, решение. Вам не нужно настраивать отдельный сервер для отдачи статики, да и производительность для pure Python весьма достойна.
+</p>
+<p>Для интернета четкой рекомендации дать сложно, вот от чего можно смело отказываться, так это от apache+mod_fastcgi: ни скорости, ни гибкости настройки. Интересно выглядит новичок CherryPy+nginx (т.е. nginx для отдачи статики и как reverse proxy для CherryPy), но требуются дополнительные исследования этого вопроса - более полное тестирование производительности, решение вопросов массового развертывания: инфраструктура запуска/останова, запускать ли приложения в одном экземпляре CherryPyWSGIServer, или &quot;разводить&quot; на разные порты. Для тех кто хочет &quot;прям сейчас и без дополнительной возни&quot;, но может мириться с более серьезным потреблением памяти, я советую apache+mod_python. Если же приходится действовать в режиме экономии памяти (например, на VDS), то lighttpd/nginx+FastCGI выглядит оптимальным вариантом. Запускать FastCGI-сервер в threaded или preforked, использовать unix socket или tcp - зависит от конкретной ситуации.
+
+</p>
+<p>Резюме:
+</p>
+<ul>
+ <li>
+     интранет - Twisted Web2
+ </li>
+ <li>
+     интернет<ul>
+ <li>
+     прям сейчас и без дополнительной возни - apache+mod_python
+ </li>
+ <li>
+     оптимально - lighttpd/nginx+FastCGI
+ </li>
+ <li>
+     многообещающе - nginx+CherryPy
+ </li>
+</ul>
+ </li>
+</ul>
+{% endmark %}

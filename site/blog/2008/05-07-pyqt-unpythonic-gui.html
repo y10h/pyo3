@@ -1,0 +1,143 @@
+{% meta %}
+    tags: [pyqt, docs]
+    title: PyQt: unpythonic GUI
+{% endmeta %}
+
+{% mark body %}
+<p>Если посмотреть на моих знакомых питонистов, то большинство из них занимаются web-разработкой. Это вполне себе показатель - Python заслуженно пользуется популярностью у web-разработчиков. Хочу немного разбавить восторги от Django и немногочисленные голоса о web.py или иных web-инструмента рассказом о том, как на Python создавать GUI-приложения.
+</p>
+<p>Для Python есть биндинги к трем основным кроссплатформенным UI-тулкитам: PyGTK (GTK+), wxPython (wxWidgets) и PyQt (Qt). Я имел некий опыт с wxPython, пробовал PyGTK, для меня темной лошадкой оставался PyQt. Пока актуальной была версия 3, стоп-фактором были нелюбимые мной <code>from pyqt import *</code> и неопределенный статус Qt3 для Windows (несмотря на то, что я использую Linux, большинство наших клиентов работают под Windows). PyQt4 в этом плане стал интересной альтернативой. Я вспомнил про него, когда возникла задачка мелкого интерфейса для поиска по БД.
+</p>
+
+<!--more-->
+<p>PyQt весьма неплох. Весьма. У него самая большая проблема - он абсолютно не вписывается в питон-стиль. Но это общая проблема: из майнстримовых UI-тулкитов ни один не обладает тем, что называется pythonic style.
+</p>
+
+<h2>Python или Qt?</h2>
+<p>Первая проблема, с которой сталкиваются разработчики, начинающие писать на PyQt: какие инструменты использовать, стандартные для Python, или стандартные для Qt? Я придерживаюсь Python-идиом, т.е. использую Qt исключительно как GUI. 
+</p>
+<p>Для того, чтобы вы могли прикинуть по своему вкусу, пара примеров.
+</p>
+<p>Первый пример - со строками. В Qt используется QString, в Python - unicode-строки. PyQt сделан так, что в Qt-функции, ожидающие QString, можно передавать unicode-строки, но возвращаются всегда QString.
+</p>
+<pre><code>&gt;&gt;&gt; from PyQt4 import QtCore
+&gt;&gt;&gt; unicode_string = u'some text, немного на русском'
+&gt;&gt;&gt; q_string = QtCore.QString(unicode_string)
+
+# размер строки
+&gt;&gt;&gt; len(unicode_string)
+&lt;&lt;&lt; 29
+&gt;&gt;&gt; q_string.length()
+&lt;&lt;&lt; 29
+
+# выравнивание по правому краю
+&gt;&gt;&gt; unicode_string.rjust(50)
+&lt;&lt;&lt; u'                     some text, \u043d\u0435\u043c\u043d\u043e\u0433\u043e \u043d\u0430 \u0440\u0443\u0441\u0441\u043a\u043e\u043c'
+&gt;&gt;&gt; print _
+                     some text, немного на русском
+&gt;&gt;&gt; q_string.rightJustified(50)
+&lt;&lt;&lt; &lt;PyQt4.QtCore.QString object at 0xb7832bac&gt;
+&gt;&gt;&gt; print unicode(_)
+                     some text, немного на русском
+</code></pre><p>Еще один пример - доступ к директориям/файлам:
+</p>
+<pre><code>&gt;&gt;&gt; import os
+&gt;&gt;&gt; from PyQt4 import QtCore
+
+## абсолютный путь к текущей директории
+# pythonic
+&gt;&gt;&gt; os.path.abspath(os.path.curdir)
+&lt;&lt;&lt; '/home/j2a'
+# Qt-ish
+&gt;&gt;&gt; QtCore.QDir().absolutePath()
+&lt;&lt;&lt; &lt;PyQt4.QtCore.QString object at 0xb71d2d2c&gt;
+&gt;&gt;&gt; print unicode(_)
+/home/j2a
+
+## запись текстовых данных в файл
+# pythonic
+&gt;&gt;&gt; py_file = file('/tmp/flpy.txt', 'w')
+&gt;&gt;&gt; py_file.write('test')
+&gt;&gt;&gt; py_file.close()
+# Qt-ish
+&gt;&gt;&gt; q_file = QtCore.QFile('/tmp/flq.txt')
+&gt;&gt;&gt; q_file.open(QtCore.QIODevice.WriteOnly | QtCore.QIODevice.Text)
+&lt;&lt;&lt; True
+&gt;&gt;&gt; q_file.write('test')
+&lt;&lt;&lt; 4L
+&gt;&gt;&gt; q_file.close()
+
+## чтение из файла
+# pythonic
+&gt;&gt;&gt; py_file = file('/tmp/flpy.txt')
+&gt;&gt;&gt; py_file.readlines()
+['test']
+&gt;&gt;&gt; py_file.close()
+# Qt-ish
+&gt;&gt;&gt; q_file = QtCore.QFile('/tmp/flq.txt')
+&gt;&gt;&gt; q_file.open(QtCore.QIODevice.ReadOnly | QtCore.QIODevice.Text)
+&lt;&lt;&lt; True
+&gt;&gt;&gt; q_file.readAll('test')
+&lt;&lt;&lt; &lt;PyQt4.QtCore.QByteArray object at 0xb77f2a6c&gt;
+&gt;&gt;&gt; unicode(QtCore.QString(_))
+&lt;&lt;&lt; u'test'
+&gt;&gt;&gt; q_file.close()
+</code></pre><p>Единственно, где я предпочитаю Qt-way, это потоки (threads). Причина проста: чаще всего в GUI потоки нужны, чтобы при выполнении каких-то &quot;долгоиграющих&quot; операций интерфейс не &quot;замораживался&quot;. И в этом плане, работа QtGui на пару с QtCore.QThread приносит меньше неожиданностей, чем QtGui + threading.Thread. Хотя всякое бывает ;)
+</p>
+
+<h2>Как делать GUI?</h2>
+<p>В PyQt есть два подхода создания GUI: руками и дизайнером. Тут сложно сказать, какой подход работает лучше всего. Если <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4/handmade_ui/handmade_ui.py">делать руками</a>, то высока вероятность получить &quot;спагетти&quot;, где код логики не отделен от кода представления. Однако для того чтобы эффективно использовать дизайнер, нужно не только изучить концепции Qt, но и переложить эти концепции на QtDesigner. Без этого получится интерфейс в лучших традициях &quot;программистов на Delphi&quot;.
+</p>
+<p>В общем, имея негативный опыт с разбором чужой &quot;лапши&quot;, я решил попробовать в деле QtDesigner. Однако и здесь нет единственного решения:
+</p>
+<ul>
+ <li>
+     .ui-файл можно либо подгружать динамически, либо &quot;компилировать&quot; в Python-код
+ </li>
+
+ <li>
+     от UI-класса можно наследоваться, либо иметь экземпляр UI-класса как атрибут
+ </li>
+</ul>
+<p>Поясню чуть подробнее. 
+</p>
+<p>QtDesigner на выходе дает описание формы в XML -- <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4/designed_ui/designed_ui.ui">.ui файл</a>. При помощи команды <code>pyuic4</code> можно на основе .ui <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4/designed_ui/designed_ui.py">сгенерировать Python-код</a>. Править его крайне не рекомендуется. Рекомендуется либо <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4/designed_ui/inherited.py">наследоваться от генеренного класса</a>:
+</p>
+<pre><code>from PyQt4 import QtCore, QtGui
+from designed_ui import Ui_DesignedWidget
+
+class InheritedWidget(QtGui.QWidget, Ui_DesignedWidget):
+    def __init__(self, parent=None):
+        QtGui.QWidget.__init__(self, parent)
+        self.setupUi(self)
+</code></pre><p>либо <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4/designed_ui/asattribute.py">представлять экземпляр этого класса как атрибут</a>:
+</p>
+<pre><code>from PyQt4 import QtCore, QtGui
+from designed_ui import Ui_DesignedWidget
+
+class WidgetWithUiAsAttr(QtGui.QWidget):
+    def __init__(self, parent=None):
+        QtGui.QWidget.__init__(self, parent)
+        self.ui = Ui_DesignedWidget()
+        self.ui.setupUi(self)
+</code></pre><p>Мне более симпатичен последний вариант (например, тем, что все ui-атрибуты вынесены в отдельное пространство имен). Собственно такой подход я и использовал в своем приложеньице.
+</p>
+<p>Однако &quot;компилирование&quot; .ui в .py - не обязательный шаг: есть возможность <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4/designed_ui/inherited_dynload.py">подгружать .ui</a> <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4/designed_ui/asattribute_dynload.py">на лету</a>:
+</p>
+<pre><code>from PyQt4 import QtCore, QtGui, uic
+
+class WidgetWithDynLoadedUiAsAttr(QtGui.QWidget):
+    def __init__(self, parent=None):
+        QtGui.QWidget.__init__(self, parent)
+        uiClass, qtBaseClass = uic.loadUiType('designed_ui.ui')
+        self.ui = uiClass()
+        self.ui.setupUi(self)
+</code></pre><p>Это красивей, чем генерировать Py-код. Хотя бы потому, что не надо писать Make-файл ;) Но меня беспокоит вот что: на компьютере пользователя окружение наверняка не совпадает с таковым у разработчика, и какое-нибудь хитрое сочетание кастомного виджета, навороченного ui и версии PyQt даст гремучую смесь. А с генеренным Py-кодом мне спокойнее, его глазами можно посмотреть.
+</p>
+
+<h2>Итог</h2>
+<p>Если вышесказанное обобщить до одной фразы, то мой совет таков: если PyQt подходит по лицензионным соображениям - смело используйте; где в приложении можно использовать Python - используйте Python; а GUI создавайте так как вам удобней, лишь следите за качеством кода.
+</p>
+<p>P.S. Код к статьям теперь в <a href="http://hg.pyobject.ru/sandbox/">Mercurial-репозитории sandbox</a>.
+</p>
+{% endmark %}

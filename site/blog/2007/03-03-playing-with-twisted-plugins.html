@@ -1,0 +1,272 @@
+{% meta %}
+    tags: [docs, twisted, plugins]
+    title: Играемся с <code>twisted.plugins</code>
+{% endmeta %}
+
+{% mark body %}
+<p>Продолжаем тему плагинов. Сегодня разговариваем о <a href="http://twistedmatrix.com/projects/core/documentation/howto/plugin.html">системе плагинов в Twisted</a>.
+</p>
+
+<!--more-->
+
+
+
+<h2>Интерфейсы</h2>
+<p>Вспомним, что Twisted активно использует <code>zope.interface</code>, и <code>twisted.plugin</code> не стал исключением. Собственно работа по подготовке программы к работе с плагинами разбивается на два этапа:
+
+</p>
+<ol>
+ <li>
+     Создание интерфейса плагина
+ </li>
+ <li>
+     Его реализация в виде конкретных плагинов
+ </li>
+</ol>
+<p>Нашим полигоном будет уже знакомый по <a href="http://www.pyobject.ru/blog/post/understanding-eggs-entrypoints/">прошлому посту</a> <code>lister</code>. Мы с минимальными переделками в коде (<code>__init__.py</code>, <code>input.py</code>, <code>output.py</code> вообще не трогались) будем приспосабливать его к <code>twisted.plugin</code>. Итак, описание интерфейсов плагинов (напомню, у нас два типа плагинов: плагины ввода и плагины вывода):
+
+</p>
+<pre><code>from zope import interface
+
+class IInputPlugin(interface.Interface):
+    &quot;&quot;&quot;
+    An input plugin interface
+    &quot;&quot;&quot;
+    name = interface.Attribute(&quot;Name of plugin&quot;)
+    desc = interface.Attribute(&quot;Plugin's description&quot;)
+    def __call__():
+        &quot;&quot;&quot;
+        Returns the iterator
+        &quot;&quot;&quot;
+
+class IOutputPlugin(interface.Interface):
+    &quot;&quot;&quot;
+
+    An output plugin interface
+    &quot;&quot;&quot;
+    name = interface.Attribute(&quot;Name of plugin&quot;)
+    desc = interface.Attribute(&quot;Plugin's description&quot;)
+    def __call__(xiter):
+        &quot;&quot;&quot;
+        Iterates over xiter and prints it in some format
+        &quot;&quot;&quot;
+</code></pre><p>Как вы заметили, здесь мы декларируем не только <em>наличие</em> точек расширения нашей программы, но и их <em>интерфейс</em>. В данном случае - тот факт, что плагины должны быть выполняемыми (callable) объектами, иметь атрибуты <code>name</code> и <code>desc</code>.
+</p>
+
+<h2>Управление плагинами</h2>
+<p>По умолчанию плагины кладутся в <code>twisted/plugins</code>. Нам же хочется, чтобы они были в <code>lister/plugins</code>. Для этого:
+</p>
+<ol>
+ <li>
+     При вызове <code>getPlugins</code> вторым параметром указываем <code>lister.plugins</code>
+
+ </li>
+
+ <li>
+     В <code>__init__.py</code> под-пакета <code>lister.plugins</code> указываем где искать плагины
+ </li>
+</ol>
+<p>Итак, первый пункт:
+</p>
+
+<pre><code>import lister.plugins  # required by getPlugins 
+
+def get_input_plugins(name=None):
+    &quot;&quot;&quot;
+    Returns iterator over available input plugins
+
+    name - show only plugins with such name, all if None
+    &quot;&quot;&quot;
+    if name is None:
+        res = plugin.getPlugins(IInputPlugin, lister.plugins)
+    else:
+        res = (p for p in get_input_plugins() if p.name == name)
+    return res
+
+def get_output_plugins(name=None):
+    &quot;&quot;&quot;
+    Returns iterator over available output plugins
+
+    name - show only plugins with such name, all if None
+    &quot;&quot;&quot;
+    if name is None:
+        res = plugin.getPlugins(IOutputPlugin, lister.plugins)
+    else:
+        res = (p for p in get_output_plugins() if p.name == name)
+    return res
+</code></pre><p>Здесь видно зачем в интерфейсах плагинов прописан атрибут <code>name</code> - в <code>twisted.plugin</code> нет способа идентификации плагинов, поэтому нам нужно каким то образом отличать их (напомню, что у нас они вызываются по имени) - для этого и используем имя плагина.
+
+</p>
+<p>И второй пункт:
+</p>
+<pre><code>import os, sys
+
+__path__ = [os.path.abspath(os.path.join(x, 'lister', 'plugins')) 
+            for x in sys.path]
+
+__all__ = []
+</code></pre><p>Таким образом, плагины ищутся в <code>lister/plugins</code> в каждом из каталогов, указанных в <code>sys.path</code>.
+</p>
+<p>По идее, уже можно переходить к реализации плагинов. Но я не хочу спешить. Зато я хочу оставить без изменения код <code>__init__.py</code>, <code>input.py</code>, <code>output.py</code> и минимально затронуть <code>command.py</code>. Поэтому, я делаю &quot;обертку&quot; для наших &quot;старых плагинов&quot;:
+
+</p>
+<pre><code>class PluginWrapper(object):
+    &quot;&quot;&quot;
+    Wrapper for making Twisted plugins for lister be easier
+    &quot;&quot;&quot;
+
+    def __init__(self, name, action):
+        &quot;&quot;&quot;
+        Making plugins to be twisted
+
+        name - name of plugin
+        action - actioner
+        &quot;&quot;&quot;
+        self.name = name 
+        self.action = action
+        self.desc = action.__doc__
+
+    def __call__(self):
+        &quot;&quot;&quot;
+        Run the action
+        &quot;&quot;&quot;
+
+        return self.action()
+
+class InputPluginWrapper(PluginWrapper):
+    &quot;&quot;&quot;
+    Wrapper for input plugins
+    &quot;&quot;&quot;
+    interface.implements(plugin.IPlugin, IInputPlugin)
+
+class OutputPluginWrapper(PluginWrapper):
+    &quot;&quot;&quot;
+    Wrapper for output plugins
+    &quot;&quot;&quot;
+    interface.implements(plugin.IPlugin, IOutputPlugin)
+
+    def __call__(self, xiter):
+        &quot;&quot;&quot;
+        Run the action for output plugin
+        &quot;&quot;&quot;
+
+        return self.action(xiter)
+</code></pre>
+<h2>Реализация плагинов</h2>
+<p>Всё, теперь можно приступать ко второму этапу - реализации плагинов. Итак, в каталоге <code>plugins</code> нашего пакета создаем <code>builtin.py</code> в котором будут &quot;встроенные&quot; плагины:
+</p>
+<pre><code>from lister.input import dir_list
+from lister.output import raw_list
+from lister.plug import InputPluginWrapper, OutputPluginWrapper
+
+dir_list_plugin = InputPluginWrapper('dir', dir_list)
+output_list_plugin = OutputPluginWrapper('raw', raw_list)
+
+</code></pre><p>Соответствующим образом изменяем <code>command.py</code> (изменения не принципиальны, так что я не привожу их здесь, любопытные могут посмотреть на <a href="http://pythy.googlecode.com/svn/trunk/twisted_plugins/lister/lister/command.py">code.google.com</a>).
+</p>
+
+<h3>listersyspath</h3>
+<p>Теперь попробуем написать новый плагин в Twisted-стиле.
+</p>
+<pre><code>import sys
+from zope.interface import implements
+from twisted.plugin import IPlugin
+from lister.plug import IInputPlugin
+
+class SysPathLister(object):
+    &quot;&quot;&quot;
+    syspath input plugin for lister, twisted style
+    &quot;&quot;&quot;
+
+    implements(IInputPlugin, IPlugin)
+    name = &quot;syspath&quot;
+    desc = &quot;&quot;&quot;
+    Lists sys.path
+    &quot;&quot;&quot;
+    def __call__(self):
+        return sys.path
+
+syspath_list_plugin = SysPathLister()
+</code></pre><p>Что здесь... Во-первых, необходимые импорты (поддержка интерфейсов <code>zope.interface</code>, поддержка Twisted-плагинов <code>IPlugin</code>, интерфейс наших плагинов <code>IInputPlugin</code>). Во-вторых класс <code>SysPathLister</code>, реализующий интерфейсы <code>IPlugin</code> и <code>IInputPlugin</code>. И в-третьих, сам объект плагина <code>syspath_list_plugin</code>, предоставляющий реализацию этих интерфейсов.
+
+</p>
+
+<h2>Проба</h2>
+<p>Теперь нужно, чтобы плагины лежали в <code>lister/plugins</code> в одном из каталогов, указанных в <code>sys.path</code>. Например, <em>текущем каталоге</em>. Итак, сделав пакет <code>lister</code> доступным для импорта, переходим в каталог, где лежат плагины и пробуем...
+</p>
+<pre><code>$ listit -l
+Input plugins:
+syspath
+    Lists sys.path
+
+dir
+    Lists current dir
+
+Output plugins:
+raw
+    Prints list 'AS IS'
+
+$ ls -lR
+.:
+итого 0
+drwxr-xr-x 3 pythy pythy 20 2007-03-02 18:20 lister
+
+./lister:
+итого 0
+drwxr-xr-x 2 pythy pythy 60 2007-03-03 23:22 plugins
+
+./lister/plugins:
+итого 12
+-rw-r--r-- 1 pythy pythy 409 2007-03-03 23:22 dropin.cache
+-rw-r--r-- 1 pythy pythy 340 2007-03-02 19:00 syspath.py
+-rw-r--r-- 1 pythy pythy 823 2007-03-03 23:22 syspath.pyc
+
+</code></pre><p>Кстати говоря, появление dropin.cache (либо сообщение о невозможности его создать) - явный признак того, что Twisted &quot;подцепил&quot; плагины.
+</p>
+<p>Код, как всегда - на <a href="http://pythy.googlecode.com/svn/trunk/twisted_plugins/">code.google.com</a>
+</p>
+
+<h2>egg's entrypoints vs twisted.plugin</h2>
+<p>Подведем итоги.
+</p>
+<p>Egg's entrypoints:
+</p>
+<ul>
+ <li>
+     Работает по pull-схеме (расширяемая программа сама опрашивает наличие плагинов)
+ </li>
+ <li>
+     Указывает только точку расширения
+ </li>
+ <li>
+     В качестве плагина служит любой Python-объект (функция, класс, экземпляр класса)
+ </li>
+ <li>
+     Код плагина полностью не зависим от расширяемой программы
+ </li>
+ <li>
+     Точка расширения указывается в мета-информации
+ </li>
+</ul>
+<p>Twisted plugin:
+</p>
+<ul>
+ <li>
+     Работает по pull-схеме (расширяемая программа сама опрашивает наличие плагинов)
+ </li>
+ <li>
+     Указывает не только точки расширения, но и интерфейсы 
+ </li>
+ <li>
+     В качестве плагина служит только экземпляр класса
+ </li>
+ <li>
+     Код плагина зависит от кода интерфейса (импортирует интерфейсы)
+ </li>
+ <li>
+     Точка расширения явно указывается в классе
+ </li>
+</ul>
+<p>Резюме таково - <code>twisted.plugin</code> годится только для программ, сделанных на основе Twisted. В остальных случаях резона использовать именно <code>twisted.plugin</code> нет. Тем более, &quot;оторвать&quot; подсистему плагинов от Twisted достаточно проблематично.
+</p>
+{% endmark %}

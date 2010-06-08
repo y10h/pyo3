@@ -1,0 +1,228 @@
+{% meta %}
+    tags: [zodb, tools, trial, docs, oodb]
+    title: Пробую ZODB
+{% endmeta %}
+
+{% mark body %}
+<p>Как и <a href="http://www.pyobject.ru/blog/post/objects-data-storage/">обещал</a> - пару слов о работе с ZODB и рабочий пример.
+</p>
+
+
+<!--more-->
+
+<h2>Первые шаги</h2>
+<p>Импортирую необходимые модули:
+</p>
+<pre><code>&gt;&gt;&gt; from ZODB import FileStorage, DB
+&gt;&gt;&gt; import transaction
+
+</code></pre><p>Для того, чтобы использовать ZODB, нужно указать хранилище:
+</p>
+<pre><code>&gt;&gt;&gt; storage = FileStorage.FileStorage('/tmp/zodb.fs')
+</code></pre><p>Открыть соединение:
+</p>
+<pre><code>&gt;&gt;&gt; db = DB(storage)
+&gt;&gt;&gt; conn = db.open()
+</code></pre><p>И получить корень ZODB:
+</p>
+<pre><code>&gt;&gt;&gt; dbroot = conn.root()
+</code></pre><p>Корень dbroot есть аналог словаря (dict):
+</p>
+<pre><code>&gt;&gt;&gt; type(dbroot)
+
+&lt;class 'persistent.mapping.PersistentMapping'&gt;
+&gt;&gt;&gt; filter(lambda x: not x.startswith('_'), dir(dbroot))
+['clear', 'copy', 'data', 'fromkeys', 'get', 'has_key', 'items',
+ 'iteritems', 'iterkeys', 'itervalues', 'keys', 'pop', 'popitem',
+ 'setdefault', 'update', 'values']
+</code></pre><blockquote><p>Поясню вторую строку: <code>filter(somefun, somelist)</code> возвращает только те элементы списка <code>somelist</code>, для которых <code>somefun(item) == True</code>. Неименованная функция <code>lambda x: not x.startswith('_')</code> возвращает <code>True</code> в том    случае, если строка <code>x</code> не начинается с '_'. Т.е. вторая строка показывает только публичные методы/атрибуты объекта dbroot.</p>
+</blockquote><p>Пробую воспоьзоваться как обычным словарем:
+</p>
+<pre><code>&gt;&gt;&gt; dbroot['key'] = ['Uno', 'Duo', 'Treo']
+</code></pre><p>Чтобы изменения были записаны нужно подтвердить транзакцию:
+</p>
+<pre><code>&gt;&gt;&gt; transaction.commit()
+</code></pre><p>Если этого не сделать, то во-первых ничего в dbroot не измениться, а во-вторых, при попытке закрыть соединение вылезет:
+</p>
+<pre><code>&gt;&gt;&gt; conn.close()
+Traceback (most recent call last):
+  File &quot;&lt;stdin&gt;&quot;, line 1, in &lt;module&gt;
+
+  File &quot;/usr/lib/python2.3/site-packages/ZODB/Connection.py&quot;, line 232, in close
+    raise ConnectionStateError(&quot;Cannot close a connection joined to &quot;
+ZODB.POSException.ConnectionStateError: Cannot close a connection joined to a transaction
+</code></pre><p>Смотрю, что же получилось:
+</p>
+<pre><code>&gt;&gt;&gt; dbroot.keys()
+['key']
+&gt;&gt;&gt; dbroot['key']
+['Uno', 'Duo', 'Treo']
+</code></pre><p>Ну и для разминки, попробую сохранить какой-нибудь класс и объект:
+</p>
+<pre><code>&gt;&gt;&gt; class Foo(object):
+...     def foometh(self):
+...         print &quot;foo&quot;
+
+... 
+&gt;&gt;&gt; class Bar(object):
+...     def barmeth(self):
+...         print &quot;bar&quot;
+...
+&gt;&gt;&gt; dbroot['class'] = Foo
+&gt;&gt;&gt; dbroot['object'] = Bar()
+&gt;&gt;&gt; import transaction
+&gt;&gt;&gt; transaction.commit()
+</code></pre><p>И посмотреть результат:
+</p>
+<pre><code>&gt;&gt;&gt; dbroot['class']
+
+&lt;class '__main__.Foo'&gt;
+&gt;&gt;&gt; dbroot['object']
+&lt;__main__.Bar object at 0xb7a08d0c&gt;
+&gt;&gt;&gt; f = dbroot['class']()
+&gt;&gt;&gt; f.foometh()
+foo
+&gt;&gt;&gt; b = dbroot['object']  
+&gt;&gt;&gt; b.barmeth()
+bar
+</code></pre>
+<h2>ZEO</h2>
+
+<p>Если попытаться одновременно открыть одно и то же хранилище, то у второго    ничего не выйдет: в модуле <code>FileStorage</code> возникнет исключение <code>IOError: [Errno 11] Resource temporarily unavailable</code> ZEO же позволяет многим клиентам по сети соединяться с одним хранилищем. Т.е. ZEO выступает в роли &quot;прокси&quot;. Работать с ZEO очень просто:
+</p>
+<pre><code>runzeo.py -a 3030 -f /tmp/zodb.fs
+</code></pre><p>Опция -a указывает ZEO слушать соединения на 3030 порту, а опция -f - имя файла-хранилища.
+</p>
+<p>В коде же клиентов вместо FileStorage надо будет использовать ClientStorage:
+</p>
+<pre><code>&gt;&gt;&gt; from ZEO import ClientStorage
+
+&gt;&gt;&gt; storage = ClientStorage.ClientStorage(('localhost', 3030))
+</code></pre>
+<h2>ZConfig</h2>
+<p>Зачастую для одного и того же кода требуется использование различных хранилищ. Например, на станции разработчика, это может быть FileStorage с тестовыми данными, а на рабочего сервере - ClientStorage с реальными данными. Поэтому удобно использовать конфигурации и конфигурационные файлы. С ZODB идет еще один &quot;кусочек&quot; Zope - ZConfig. Т.е. в коде клиентов нужно указать, какой конфигурационный файл будем использовать:
+</p>
+<pre><code>&gt;&gt;&gt; from ZODB import config
+&gt;&gt;&gt; db = config.databaseFromURL('references.conf')
+</code></pre><p>Если есть желание использовать ZODB.FileStorage, то в конфигурационном файле нужно указать:
+</p>
+<pre><code>&lt;zodb&gt;
+  &lt;filestorage&gt;
+    path /tmp/zodb.fs
+  &lt;/filestorage&gt;
+&lt;/zodb&gt;
+</code></pre><p>А если ZEO.ClientStorage, то:
+</p>
+<pre><code>&lt;zodb&gt;
+  &lt;zeoclient&gt;
+    server localhost:3030
+  &lt;/zeoclient&gt;
+&lt;/zodb&gt;
+</code></pre>
+<h2>Ограничения ZODB</h2>
+<p>У ZODB (как и у любого другого хранилища сериализированных объектов) есть ограничения:
+</p>
+<ul>
+ <li>
+     При изменении объекта ZODB помечает его как &quot;грязный&quot; (dirty) и при 
+     подтверждении транзакции записывает в хранилище только &quot;грязные&quot; объекты. При модификации изменяемого (mutable, например список, словарь) атрибута объекта, ZODB не помечает его как quot;грязный&quot;. Решение - либо вручную помечать, что объект стал &quot;грязным&quot; (атрибут <code>_p_changed</code>), либо использовать не обычные списки и словари, 
+а их &quot;обертки&quot; (PersistentList и PersistentMapping). Кстати говоря, корень
+ZODB - пример PersistentMapping
+ </li>
+ <li>
+     Современные версии ZODB позволяют переопределять методы <code>__setattr__</code>, 
+<code>__getattr__</code> и <code>__delattr__</code>. (старые версии вообще не позволяли это делать),  но в этом случае, нужно не забывать помечать объекты &quot;грязными&quot; при изменении атрибута.
+ </li>
+
+ <li>
+     Объекты не должны имет метод <code>__del__</code>.
+ </li>
+</ul>
+
+<h2>Пример (справочники в ZODB)</h2>
+<p>Как я уже говорил, я использую ZODB для хранение справочников. Таких справочников некоторое количество, так что весьма расточительно хранить отдельный справочник в отдельном хранилище. Удобнее создать одно хранилище, и уже в нем хранить все справочники.
+</p>
+<blockquote><p>Для хранения большого количества данных обычные словари (тип dict) не эффективны. В ZODB есть пакет, реализующий <a href="http://en.wikipedia.org/wiki/Btree">B-tree</a>. В составе пакета <code>BTrees</code> пять разновидностей B-tree:  <code>IFBTree</code>, <code>IIBTree</code>, <code>IOBTree</code>, <code>OIBTree</code>, <code>OOBTree</code>. Каждая из разновидностей оптимизирована для различных типов ключей и данных. Определить, где какую разновидность использовать, очень легко:  в названии разновидности B-tree первая буква - тип ключа, вторая - тип ключевого значения. I - целое (int), F - с плавающей точкой (float), O - объект (object). Я использую в основном IOBTree (если ключи - целые, а так зачастую и бывает) и OOBTree (если ключи - строки).
+</p>
+</blockquote><p>Итак, реализация справочников в ZODB:
+</p>
+<ul>
+ <li>
+     класс ReferenceItem, наследованный от Persistent, для представления отдельного значения справочника;
+ </li>
+ <li>
+     класс DataStorage, реализующий подключение и отключение ZODB;
+ </li>
+
+ <li>
+     класс Reference, наследованный от DataStorage, реализующий создание нового справочника либо использование уже существующего;
+ </li>
+
+ <li>
+     класс ReferenceById, наследованный от Reference. Предназначен для представления справочника, где ключи - числа, соответственно, использующего наиболее эффективный тип B-tree - IOBTree.
+ </li>
+</ul>
+<p>Код класса ReferenceItem я не буду приводить, при желании вы можете глянуть   его в <a href="http://pythy.googlecode.com/svn/trunk/zodb/references.py">references.py на code.google.com</a>.</p>
+<p>А вот код классов для реализации справочников я приведу:
+</p>
+<pre><code>from ZODB import config
+from BTrees import IOBTree
+
+class DataStorage(object):
+    &quot;&quot;&quot;Data storage (ZODB) &quot;&quot;&quot;
+
+    def __init__(self):
+        self.db = config.databaseFromURL('references.conf')
+        self.conn = self.db.open()
+        self.root = self.conn.root()
+
+    def finish(self):
+        self.conn.close()
+        self.db.close()
+
+class Reference(DataStorage):
+    &quot;&quot;&quot;Reference&quot;&quot;&quot;
+    def __init__(self, referenceName, bTreeType):
+        DataStorage.__init__(self)
+        refname = &quot;ref_%s&quot; % referenceName
+        if refname not in self.root.keys():
+            self.root[refname] = bTreeType()
+        self.refname = refname
+        self.ref = self.root[refname]
+
+    def __getitem__(self, key):
+        return self.ref[key]
+
+    def __setitem__(self, key, value):
+        self.ref[key] = value
+
+    def delete(self):
+        del(self.root[self.refname])
+        self.ref = None
+
+class ReferenceById(Reference):
+    &quot;&quot;&quot;Reference where keys are integers&quot;&quot;&quot;
+    def __init__(self, referenceName):
+        Reference.__init__(self, referenceName, IOBTree.IOBTree)
+</code></pre><p>Ну и пример использования:
+</p>
+<pre><code>&gt;&gt;&gt; from references import ReferenceById
+
+&gt;&gt;&gt; exref = ReferenceById('example')
+&gt;&gt;&gt; exref.refname
+'ref_example'
+&gt;&gt;&gt; exref.ref    
+&lt;BTrees._IOBTree.IOBTree object at 0xb76a9584&gt;
+&gt;&gt;&gt; exref[1] = 'example value'
+&gt;&gt;&gt; exref[1]
+'example value'
+&gt;&gt;&gt; exref.root.keys()
+['ref_example']
+&gt;&gt;&gt; exref.delete()
+&gt;&gt;&gt; exref.root.keys()
+[]
+
+</code></pre><p>Конечно, это весьма общие наброски. К примеру, в рабочей версии у меня реализована проверка типа BTree у уже существующего справочника (например, создавали IOBTree, а на чтение обращаются как к OOBTree), но это не принципиальные детали, так что я их не стал включать в пример.</p>
+<p>Весь код - на <a href="http://pythy.googlecode.com/svn/trunk/zodb/">code.google.com</a>
+</p>
+{% endmark %}

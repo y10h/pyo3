@@ -1,0 +1,34 @@
+{% meta %}
+    tags: [werkzeug, wsgi, jinja, sqlalchemy]
+    title: Werkzeug, Jinja и все-все-все
+{% endmeta %}
+
+{% mark body %}
+<p>Давно хотел попробовать <a href="http://wsgiarea.pocoo.org/colubrid/">Colubrid</a> на пару с <a href="http://jinja.pocoo.org/">Jinja</a>. Теперь у Colubrid есть преемник - <a href="http://werkzeug.pocoo.org/">Werkzeug</a>, от той же <a href="http://dev.pocoo.org/">Pocoo team</a>. И Jinja с той поры сильно поменялся, но обо всём по-порядку.
+</p>
+
+<!--more-->
+<h3>Предыстория</h3>
+<p>Пару недель назад при разговоре с <a href="http://piranha.org.ua/">Александром Соловьевым</a> вспомнился небольшой проект годовой давности на Django с хитрыми SQL-запросами, где вместо изменения структуры данных я тогда нагородил огород с генерацией SQL-запросов. И буквально через пару дней после разговора встала задача сделать ревизию этого проекта. У меня были наметки, как получше сделать этот проект, но пришлось бы сильно менять структуры данных и код, так что было решено, что переписать с нуля будет проще. Я как раз подыскивал проект для пробы Werkzeug и эта задача легла очень хорошо: ни аутентификации, ни обработки форм.
+</p>
+<p>Компоненты конечного приложения выглядели так: <a href="http://www.portablepython.com/">Portable&nbsp;Python&nbsp;1.0</a>, <a href="http://sqlalchemy.org">SQLAlchemy&nbsp;0.4.2</a>, Werkzeug&nbsp;0.2dev, Jinja&nbsp;1.3dev. Теперь о компонентах поподробнее.
+</p>
+
+<h3>SQLAlchemy</h3>
+<p>Версия 0.4 мне понравилась намного больше чем 0.3. В старой версии у меня не получалось выстроить логичной картины, где используется orm, а где sql-kit. В новой версии всё разделено, так что стало всё более прозрачно, на мой взгляд. Вещи, которые прилично помогли: маппинг на объединенные таблицы, интроспекция запросов, совместимость критериев выборки в orm и sql-kit. Благодаря этим возможностям SQLAlchemy, код вьюшек сильно упростился, плюс удалось вынести общий код в отдельный модуль. Тут, конечно, еще сильно повлиял редизайн приложения: я отказался от нормализации данных, усложнив код загрузки данных в БД, но упростив вьюшки.
+</p>
+
+<h3>Werkzeug</h3>
+<p>Werkzeug пока темная лошадка среди питонистов, так что об этом инструменте я расскажу чуть подробнее.
+</p>
+<p>Werkzeug - это компактный (чуть менее 10k строк) WSGI-тулкит. Что он дает: <a href="http://werkzeug.pocoo.org/documentation/wrappers">request/response-объекты</a>, <a href="http://werkzeug.pocoo.org/documentation/exceptions">http-exceptions</a>, <a href="http://werkzeug.pocoo.org/documentation/debug">отладку в браузере</a>, http-сервер с автоперезагрузкой, юнит-тесты для WSGI-приложения, <a href="http://werkzeug.pocoo.org/documentation/local">threadsafe менеджер локальных даных</a>, <a href="http://werkzeug.pocoo.org/documentation/utils">вспомогательные утилиты для работы с WSGI-environ</a>, <a href="http://werkzeug.pocoo.org/documentation/routing">роутинг запросов</a>. Из всего этого наиболее &quot;вкусное&quot; - это отладка, про которую уже <a href="http://piranha.org.ua/blog/2007/12/16/django-debug/">писал Александр Соловьев</a>, и роутинг запросов. Очень понравилось то, что Werkzeug работает не с Python-объектами как конечными точками роутинга, а с некоторой абстракцией - endpoint. Преобразования URL?endpoint и endpoint?URL берет на себя Werkzeug, а endpoint?py-callable и py-callable?endpoint - разработчик приложения. Такой подход дает необычайную гибкость. Что еще хорошо: в примерах к Werkzeug есть best-practice - <a href="http://dev.pocoo.org/projects/werkzeug/browser/examples/shorty">назначение URLов декораторами</a> (в своем приложении я использовал именно этот способ), <a href="http://dev.pocoo.org/projects/werkzeug/browser/examples/webpylike">web.py-like</a>, <a href="http://dev.pocoo.org/projects/werkzeug/browser/examples/partial">routes-like</a>; так что можно взять готовый рецепт, или написать свой.
+</p>
+
+<h3>Jinja</h3>
+<p>Почти все компоненты мне понравились, отличился Jinja. Мою фразу <a href="http://www.pyobject.ru/blog/post/concepts-of-pylons#comment-174">&quot;Jinja - это правильные Django&nbsp;templates&quot;</a> можно применить разве что к Jinja до версии 1.0. После версии 0.9 это уже другой движок с таким же именем. Попробовав Jinja 1.3dev, скажу, что от Django&nbsp;templates остался только базовый синтаксис <code>{{ '{%' }}&nbsp;expression&nbsp;{{ '%}' }}</code>, <code>{{ '{{' }}&nbsp;value&nbsp;{{ '}}' }}</code>. У Django&nbsp;templates есть масса достоинств, и не так много недостатков. Jinja, на мой взгляд, похоронил все достоинства, плюс приобрел кучу собственных недостатков. Уж лучше <a href="http://www.makotemplates.org/">Mako</a> - хотя бы нет ложных аналогий с Django&nbsp;templates.
+</p>
+
+<h3>Итоги</h3>
+<p>Werkzeug хорош. Хорош для тех задач, где фреймворк избыточен (еще бы правильно определить, избыточен ли Django для текущей задачи (-: ). На голову выше Paste: удобней, компактнее, логичней - хотя и не перекрывает всех возможностей Paste. Про SQLAlchemy сомнений никаких не было - наиболее гибкий ORM из существующих, тем более в версии 0.4 его прилично &quot;причесали&quot;. А вот Jinja - вообще не вариант.
+</p>
+{% endmark %}

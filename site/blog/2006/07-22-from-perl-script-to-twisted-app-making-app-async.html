@@ -1,0 +1,114 @@
+{% meta %}
+    tags: [docs, async, twisted]
+    title: От Perl-скрипта к Twisted-приложению: Делаем приложение асинхронным
+{% endmeta %}
+
+{% mark body %}
+<p><a href="http://www.pyobject.ru/blog/post/from-perl-script-to-twisted-app-draft/">В прошлый раз</a> был создан &quot;черновик&quot; Twisted-приложения, в котором
+   описание протокола разделено с логикой получения и преобразования данных из
+   БД. Однако, у написанного варианта есть существенный недостаток: он не
+   позволяет организовать одновременный доступ нескольких клиентов.
+</p>
+<p>
+<!--more-->
+
+   Демонстрирую: ставлю паузу в DummyClient в 20 секунд, пишу многопоточного
+   клиента (взял пример многопоточного приложения у <a href="http://cqc.univer.omsk.su/j2a/python/doc/eng/o%27reilly%20-%20programming%20python.zip">Марка Лутца</a>):
+</p>
+
+<pre><code>import thread
+import telnetlib
+import datetime
+import time
+
+HOST = &quot;localhost&quot;
+PORT = 3000
+
+def connect_to_twisted_pythy(sending_data, myId):
+    stdout_mutex.acquire()
+    print &quot;send @&quot;, datetime.datetime.now(), sending_data
+    stdout_mutex.release()
+    tn = telnetlib.Telnet(host=HOST, port=PORT)
+    tn.write(sending_data+'\\r\\n')
+    data = tn.read_some()
+    tn.write('\\r\\n')
+    tn.close()
+    stdout_mutex.acquire()
+    print &quot;receive @&quot;, datetime.datetime.now(), data
+    stdout_mutex.release()
+    exit_mutexes[myId] = 1
+
+stdout_mutex = thread.allocate_lock()
+exit_mutexes = [0]*2
+sdata = ['12345678901234567890','abcdefghijklmnopqrst']
+for d in sdata:
+    thread.start_new_thread(connect_to_twisted_pythy, (d,sdata.index(d)))
+while 0 in exit_mutexes:
+    time.sleep(1)
+    pass
+</code></pre><p>И запускаю его:
+</p>
+<pre><code>send @ 2006-07-22 22:07:35.654955 12345678901234567890
+send @ 2006-07-22 22:07:35.660285 abcdefghijklmnopqrst
+receive @ 2006-07-22 22:07:55.659855 dummypacketmaker012345678Dummy_12345
+receive @ 2006-07-22 22:08:15.661068 dummypacketmaker012345678Dummy_klmno
+</code></pre><p>В логах сервера вижу
+</p>
+<pre><code>2006/07/22 22:07 OMSST [TwistedPythy.proto.PythyFactory] got connection from ('127.0.0.1', 2282)
+2006/07/22 22:07 OMSST [PythyProto,0,127.0.0.1] data received from ('127.0.0.1', 2282): `12345678901234567890'
+2006/07/22 22:07 OMSST [PythyProto,0,127.0.0.1] data send: dummypacketmaker012345678Dummy_12345
+2006/07/22 22:07 OMSST [TwistedPythy.proto.PythyFactory] got connection from ('127.0.0.1', 2283)
+2006/07/22 22:07 OMSST [PythyProto,1,127.0.0.1] data received from ('127.0.0.1', 2283): `abcdefghijklmnopqrst'
+2006/07/22 22:08 OMSST [PythyProto,1,127.0.0.1] data send: dummypacketmaker012345678Dummy_klmno
+</code></pre><p>Очевидно, что второй клиент ждал не 20, а 40 секунд - 20 за себя, и 20 за &quot;того парня&quot; - первый пакет. И хотя отослали они одновременно, по логам сервера ясно видно, что сервер принял запросы последовательно, т.е. вначале полностью обработал первый и только потом взялся за второй. Нас так, конечно, нисколько не устраивает. Иначе говоря, наш метод getClient оказался блокирующим. В некоторых случаях удается переписать такой код на неблокирующий (асинхронный), однако есть одно ухищрение, позволяющее интегрировать блокирующий код в Twisted-приложение. Это <a href="http://twistedmatrix.com/projects/core/documentation/howto/gendefer.html#auto5">deferredToThread</a>, выделяющее блокирующий код в отдельный поток и &quot;оборачивающий&quot;   этот поток в Deferred.
+</p>
+<blockquote><p>Deferred - это специальный объект в Twisted, который и организует <a href="http://twistedmatrix.com/projects/core/documentation/howto/async.html">асинхронное
+взаимодействие</a>. Принцип примерно таков: функция возвращает не значение, а
+   некий отложенный результат - &quot;как закончу, сообщу&quot; - к которому &quot;навешивается&quot;
+   цепочка callback- и errback-функций. Callback-функции выполняются при удачном
+   завершении, errback - при не удачном.
+</p>
+</blockquote><p>Итак, переписываю протокол для выделения блокирующего кода в отдельный поток:
+</p>
+<pre><code>from twisted.python import log
+from twisted.internet import threads
+
+# полагается, что PythyProto у нас либо импортирован,
+# либо находится в том же модуле
+
+class AsyncPythyProto(PythyProto):
+    &quot;&quot;&quot;Simple text demo protocol with async (deferred) method for fetching data&quot;&quot;&quot;
+
+    def lineReceived(self, line):
+        log.msg(&quot;data received from %s: `%s'&quot; % (str(self.transport.client), line))
+        if line == '':
+            self.sendLine(&quot;Good bye&quot;)
+            self.transport.loseConnection()
+            return
+        agr = line[10:15]
+        deferred = threads.deferToThread(self.factory.clients.getClient, agr)
+        deferred.addCallback(self._cbGetCleint)
+
+    def _cbGetClient(self, result):
+        self.sendAnswer(result)
+</code></pre><p>Соответствующим образом изменяю тип протокола в PythyFactory (точнее,
+   наследую от него AsyncPythyFactory, и уже в нем меняю), запускаю:
+</p>
+<pre><code>send @ 2006-07-22 22:35:59.451674 12345678901234567890
+send @ 2006-07-22 22:35:59.459583 abcdefghijklmnopqrst
+receive @ 2006-07-22 22:36:19.466258 dummypacketmaker012345678Dummy_klmno
+receive @ 2006-07-22 22:36:19.466707 dummypacketmaker012345678Dummy_12345
+</code></pre><p>и, соответственно, в логах сервера:
+</p>
+<pre><code>2006/07/22 22:35 OMSST [TwistedPythy.proto.AsyncPythyFactory] got connection from ('127.0.0.1', 4187)
+2006/07/22 22:35 OMSST [AsyncPythyProto,0,127.0.0.1] data received from ('127.0.0.1', 4187): `12345678901234567890'
+2006/07/22 22:35 OMSST [TwistedPythy.proto.AsyncPythyFactory] got connection from ('127.0.0.1', 4188)
+2006/07/22 22:35 OMSST [AsyncPythyProto,1,127.0.0.1] data received from ('127.0.0.1', 4188): `abcdefghijklmnopqrst'
+2006/07/22 22:36 OMSST [-] data send: dummypacketmaker012345678Dummy_12345
+2006/07/22 22:36 OMSST [-] data send: dummypacketmaker012345678Dummy_klmno
+</code></pre><p>Чего и добивался.
+</p>
+<p>Как водится, код можно взять на <a href="http://rapidshare.de/files/26635589/twistedpythy_02.zip.html">RapidShare</a>.
+
+</p>
+{% endmark %}

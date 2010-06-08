@@ -1,0 +1,103 @@
+{% meta %}
+    tags: [testing, twisted, tools, code_coverage]
+    title: Покрытие кода тестами
+{% endmeta %}
+
+{% mark body %}
+Юнит-тесты хороши, когда покрывают весь ключевой код. Однако если проект чуть больше, чем "Hello, world!", то оценить <a href="http://ru.wikipedia.org/wiki/%D0%9F%D0%BE%D0%BA%D1%80%D1%8B%D1%82%D0%B8%D0%B5_%D0%BA%D0%BE%D0%B4%D0%B0">степень покрытия</a> весьма проблематично. Существуют инструменты, которые помогают это делать. Для Python я знаю два таких:
+<ul>
+	<li><a href="http://twistedmatrix.com/trac/wiki/TwistedTrial">twisted.trial</a> - каркас юнит-тестов, часть <a href="http://twistedmatrix.com">Twisted</a></li>
+	<li><a href="http://www.nedbatchelder.com/code/modules/coverage.html">coverage.py</a> - модуль Неда Бачелдера</li>
+</ul>
+
+<!--more-->
+
+Приведу примеры использования каждого из инструментов.
+
+<h2>twisted.trial</h2>
+У команды <code>trial</code> есть опция <code>coverage</code>, после выполнения всех тестов во временном каталоге тестов появляется информация о покрытии кода тестами (по умолчанию искать нужно в <code>_trial_temp/coverage</code>). Имена файлов имеют вид <code>package_name.module_name.cover</code>. Каждый файл содержит строчки кода и счетчик, сколько раз каждая строка была выполнена. Ни разу не выполненные строки помечаются маркером <code>&gt;&gt;&gt;&gt;&gt;&gt;</code>.
+
+Т.е. никаких количественных оценок <code>twisted.trial</code> не дает, лишь визуально выделяет непротестированные участки кода. Правда, получить количественные оценки по этим результатам достаточно просто (достаточно подсчитать общее количество "помеченных" и "посчитанных" строк и взять от этого количества процентное соотношение к "помеченным"), странно что это не сделали разработчики. Еще один минус, который хочу отметить - необходимо использовать <code>twisted.trial</code>, а не <code>unittest</code> (т.е. во всех модулях юнит-тестов заменить <code>import unittest</code> на <code>from twisted.trial import unittest</code>). Ну и ставить целиком Twisted (а trial является его неразрывным компонентом) только ради того, чтобы померить покрытие кода, нецелесообразно.
+
+<h2>coverage.py</h2>
+<code>coverage.py</code> является более адекватным инструментом - ни от каких дополнительных библиотек он не зависит, может использоваться как из командной строки, так и из кода (как библиотека). Плюс к этому, он может выдавать как суммарный результат (в процентах), так и анотированный (т.е. копия исходного файла, в котором протестированная строка помечается <code>&gt;</code>, не протестированная - <code>!</code>). В общем, must have. Ниже приведу пару советов по использованию.
+
+<h3>Из командной строки</h3>
+
+Первый шаг - собирается информация по ходу выполнения юнит-тестов, собранная информация сохраняется в файле <code>.coverage</code> текущего каталога. Если ранее <code>coverage.py</code> уже запускался, то лучше сбросить ранее сохраненные данные (ключ <code>-e</code>)
+<code><pre>
+$ coverage.py -e
+$ coverage.py -x /path/to/unit/test_module.py
+</pre></code>
+
+Второй шаг - по полученной информации создается суммарный отчет для указанного файла
+<code><pre>
+$ coverage.py -r -m /path/to/module.py
+</pre></code>
+
+Если же хочется получить анотированный отчет, то для этого служит опция  <code>-a</code>:
+<code><pre>
+$ coverage.py -a /path/to/module.py
+</pre></code>
+и после этого, рядом с <code>module.py</code> появляется анотированный <code>module.py,cover</code>
+
+Ну и "живой" пример с <a href="http://gorod-omsk.ru/blog/pythy/projects/pytils/">PyTils</a>:
+<code><pre>
+$ coverage.py -e
+$ coverage.py -x /usr/local/lib/python2.4/site-packages/pytils/test/__init__.py
+testChoosePlural (pytils.test.test_numeral.ChoosePluralTestCase) ... ok
+[...]
+testProvideUnicode (pytils.test.test_utils.UnicodeTestCase) ... ok
+
+----------------------------------------------------------------------
+Ran 36 tests in 0.252s
+
+OK
+$ coverage.py -r -m /usr/local/lib/python2.4/site-packages/pytils/numeral.py 
+Name                                                    Stmts   Exec  Cover   Missing
+-------------------------------------------------------------------------------------
+/usr/local/lib/python2.4/site-packages/pytils/numeral     138    136    98%   340, 365
+</pre></code>
+
+<h3>Из кода</h3>
+Использовать <code>coverage.py</code> из кода даже проще, чем из командной строки:
+
+<code><pre>
+&gt;&gt;&gt; import coverage
+&gt;&gt;&gt; coverage.erase()
+&gt;&gt;&gt; coverage.start()
+&gt;&gt;&gt; import yourmodule
+&gt;&gt;&gt; youmodule.test.run()
+&gt;&gt;&gt; coverage.stop()
+&gt;&gt;&gt; coverage.report([yourmodule.foo, yourmodule.bar])
+</code></pre>
+
+и живой пример:
+
+<code><pre>
+&gt;&gt;&gt; import coverage
+&gt;&gt;&gt; coverage.erase()
+&gt;&gt;&gt; coverage.start()
+&gt;&gt;&gt; import pytils
+&gt;&gt;&gt; pytils.VERSION
+'0.1.0-svn20061002'
+&gt;&gt;&gt; pytils.test.run()
+....................................
+----------------------------------------------------------------------
+Ran 36 tests in 0.207s
+
+OK
+&gt;&gt;&gt; coverage.stop()
+&gt;&gt;&gt; coverage.report([pytils.dt, pytils.numeral, pytils.translit, pytils.utils])
+Name              Stmts   Exec  Cover   Missing
+-----------------------------------------------
+pytils.dt            85     85   100%   
+pytils.numeral      138    136    98%   340, 365
+pytils.translit      38     37    97%   197
+pytils.utils         34     32    94%   28-29
+-----------------------------------------------
+TOTAL               295    290    98%
+</pre></code>
+
+P.S. Нед говорит, что еще есть <a href="http://www.geocities.com/drew_csillag/pycover.html">pycover</a> и что в <a href="http://www.mems-exchange.org/software/sancho/">Sancho</a> тоже можно покрытие кода померять, но я ни тот, ни другой не пробовал.
+{% endmark %}

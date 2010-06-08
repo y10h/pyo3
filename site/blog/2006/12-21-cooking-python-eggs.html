@@ -1,0 +1,164 @@
+{% meta %}
+    tags: [setuptools, install, eggs, docs]
+    title: Готовим Python Eggs
+{% endmeta %}
+
+{% mark body %}
+<p>Более чем уверен, что работая с Python, вы рано или поздно столкнетесь (или уже столкнулись) с Python Eggs, в просторечии - яйцами. И я, встретив их достаточно давно, какое то время избегал пользоваться ими. Как выяснилось - зря. Чтобы ваше знакомство с eggs было легким и непринужденным, я и написал эту заметку.
+</p>
+
+<!--more-->
+
+<h2>Установка пакетов</h2>
+<p>Существует три способа поставить Python-пакет:
+</p>
+<ol>
+ <li>
+     Стандартным для системы способом (пакет для Linux, инсталлятор для Windows)
+ </li>
+
+ <li>
+     Из исходных текстов
+ </li>
+
+ <li>
+     Python eggs
+ </li>
+</ol>
+<p>Первый и последний -- это пакеты в бинарном виде, т.е. скомпилированные под определенную версию Python: 2.3, 2.4, 2.5. Второй является универсальным, однако зачастую требует C-компилятора.
+</p>
+<p>Естественно, рекомендуемым способом является первый. Но тут есть одно &quot;но&quot;: если у Linux-систем с зависимостями между пакетами всё в относительном порядке, то в Windows не всё гладко. Инструмента, который бы отслеживал зависимости программ, в Windows просто нет. Поэтому, авторам пакетов в виде инсталляторов лишь остается указывать в документации, что необходимо поставить, чтобы данный пакет заработал.
+</p>
+<p>Python eggs позволяют использовать кроссплатформенный механизм зависимостей для Python-пакетов. В отличии от принятой в Linux-дистрибутивах концепции, зависимости eggs-пакета пытаются &quot;разрешиться&quot; уже после установки пакета. Для Windows это весьма большой шаг вперед, а вот для Linux не однозначно: дело в том, что системные инструменты (APT в случае Debian и Ubuntu) ничего не знают об установленных при помощи <code>easy_install</code> пакетах, и наоборот - <code>easy_install</code> не находит <em>уже установленные</em> при помощи APT пакеты, скачивая их заново. Было бы очень здорово, если бы существовал инструмент конвертации из egg в deb. Часто в deb просто нет пакетов, которые есть в egg (например, <a href="http://www.pylonshq.com">Pylons</a>), либо они опаздывают по версиям (например, <a href="http://www.pythonpaste.org">Paste</a>). 
+</p>
+<blockquote><p>Стоит отметить, что eggs хороши, когда есть постоянное подключение к Internet, или хотя бы во время выполнения команды <code>easy_install</code>, в других случаях они не так удобны.
+</p>
+</blockquote>
+<h2>Linux</h2>
+
+<h3>Информация к размышлению</h3>
+<p>Немного отвлекусь от разговора об eggs и поясню как и куда ставятся Python-пакеты. Системные пакеты (т.е. те, которые устанавливаются при помощи APT или другого менеджера пакетов) помещаются в <code>/usr/lib/python2.4/site-packages</code>. Если вы сами ставите пакет при помощи <code>python setup.py install</code>, то он по умолчанию помещается в вышеуказанный каталог, куда доступ на запись - только у root. Так что, чтобы установить установить "руками" пакет в рекомендуемый <code>/usr/local/lib/python2.4/site-packages</code> нужно указать опцию <code>prefix</code>. Иными словами, полагается, что в <code>/usr</code> пользователь вообще ничего не меняет <em>вручную</em>, всё делается при помощи соответствующих инструментов (или, как говорят, в <code>/usr</code> не должно быть ничего, что не знает APT). 
+</p>
+<blockquote><p>Во-первых, я рассматриваю варианты, когда используется стабильная версия Debian (3.1 Sarge) или LTS-версия Ubuntu (6.06 Dapper Drake). Во-вторых, предполагаю использование Python-2.4. Любое из этих предположений не принципиально, однако принято для определенности. В более свежих версиях Debian и Ubuntu поменялась Python-инфраструктура, но лишь для пакетов, устанавливаемых при помощи APT, так что для сегодняшнего разговора это не столь важно.
+</p>
+</blockquote><p>Вот тут и выходит на сцену setuptools: <code>easy_install</code> по умолчанию желает ставить eggs в <code>/usr/lib/python2.4/site-packages</code>, т.е. в каталог, который доступен на запись только пользователю root. И очень многие соглашаются с этим желанием и используют команду <code>sudo easy_install NeededPackage</code>, т.е. запускают <code>easy_install</code> с root-привилегиями и это <strong>в корне не верно</strong>. А правильный способ - это указать setuptools ставить eggs в отдельный каталог. И я бы советовал <strong>не использовать</strong> для этого дела <code>/usr/local/lib/python2.4/site-packages</code> по простой причине - держать яйца в разных корзинах. И тогда вы точно будете знать, какой пакет поставили при помощи APT, какой &quot;руками&quot;, а какой - при помощи <code>easy_install</code>. Более того, при установке пакетов &quot;руками&quot; я бы вам советовал воспользоваться <a href="http://www.gnu.org/software/stow/">stow</a> чтобы точно знать какой файл кому принадлежит.
+</p>
+<p>Однако есть один момент: для <code>easy_install</code> (при помощи которого ставятся eggs) и <code>distutils</code> (который &quot;работает&quot;, когда вы делаете <code>python setup.py install</code> используются одни и те же конфигурационные файлы. Я предлагаю такой подход: в конфиге указываем опции для eggs и ставим их просто <code>easy_install NeededPackage</code>, а для установки &quot;руками&quot; используем опцию <code>--prefix</code>.
+</p>
+
+<h3>Пошаговые инструкции</h3>
+<p>Прежде чем ставить setuptools, нужно написать конфиг <code>~/.pydistutils.cfg</code>. В конфиге указываем где будут библиотеки и где исполняемые файлы. Я предлагаю ставить в <code>/usr/local/egg</code>.
+</p>
+<pre><code>[install]
+prefix=/usr/local/egg
+</code></pre><p>Далее, нужно создать необходимые каталоги:
+</p>
+<pre><code>pythy@axcel:~$ mkdir -p /usr/local/egg/bin
+pythy@axcel:~$ mkdir -p /usr/local/egg/lib/python2.4/site-packages
+</code></pre><p>Теперь время подготовить переменные окружения. Добавьте строки
+</p>
+<pre><code>export PATH=&quot;${PATH}&quot;:/usr/local/egg/bin
+export PYTHONPATH=&quot;${PYTHONPATH}&quot;:/usr/local/egg/lib/python2.4/site-packages
+</code></pre><p>в <code>~/.bashrc</code> и выйти и зайдите в систему. Проверьте, что переменные установлены:
+</p>
+<pre><code>pythy@axcel:~$ echo $PATH
+/home/pythy/bin:/usr/local/bin:/usr/bin:/bin:/usr/bin/X11:/usr/games:/usr/local/egg/bin
+pythy@axcel:~$ echo $PYTHONPATH
+:/usr/local/egg/lib/python2.4/site-packages
+</code></pre><p>Всё, теперь вы готовы к установке setuptools. Рекомендуемый мной способ - установка штатным для системы образом. Т.е. для Debian и Ubuntu это <code>aptitude install python-setutools</code>. Однако, может такое случится, что нужна более свежая версия, чем есть в пакетах. В этом случае, как запасной вариант, можно установить и как egg:
+</p>
+<blockquote><p>Для работы setuptools понадобится пакет <code>python-dev</code>, так что установите его заблаговременно
+</p>
+</blockquote><pre><code>pythy@axcel:~$ wget -q http://peak.telecommunity.com/dist/ez_setup.py
+pythy@axcel:~$ python ez_setup.py
+Downloading http://cheeseshop.python.org/packages/2.4/s/setuptools/setuptools-0.6c3-py2.4.egg
+Creating /usr/local/egg/lib/python2.4/site-packages/site.py
+Processing setuptools-0.6c3-py2.4.egg
+creating /usr/local/egg/lib/python2.4/site-packages/setuptools-0.6c3-py2.4.egg
+Extracting setuptools-0.6c3-py2.4.egg to /usr/local/egg/lib/python2.4/site-packages
+Adding setuptools 0.6c3 to easy-install.pth file
+Installing easy_install script to /usr/local/egg/bin
+Installing easy_install-2.4 script to /usr/local/egg/bin
+
+Installed /usr/local/egg/lib/python2.4/site-packages/setuptools-0.6c3-py2.4.egg
+Processing dependencies for setuptools==0.6c3
+</code></pre><p>После этого можете спокойно пользоваться <code>easy_install</code> для установки необходимых пакетов.
+</p>
+
+<h3>Установка пакетов &quot;вручную&quot;</h3>
+<p>Я рекомендую использовать <a href="http://www.gnu.org/software/stow/">stow</a> для контроля приложений, установленных &quot;руками&quot;, в том числе и Python-пакеты. Используется очень просто: в качестве префикса для установки указываем <code>/usr/local/stow/PackageName</code>:
+</p>
+<pre><code>pythy@axcel:~/tmp/py$ python setup.py install --prefix=/usr/local/stow/PackageName
+</code></pre><p>после этого идем в <code>/usr/local/stow</code> и выполняем команду <code>stow PackageName</code>. В результате имеем в <code>/usr/local/lib</code> и <code>/usr/local/bin</code> <em>только симлинки</em>, по адресу которых можно легко определить к какому пакету относится тот или иной файл.
+</p>
+<p>Если же вам не хочется использовать stow, то можете ставить Python-пакеты так:
+</p>
+<pre><code>pythy@axcel:~/tmp/py$ python setup.py install --prefix=/usr/local
+</code></pre><p>В этом случае все скрипты будут в <code>/usr/local/bin</code>, а все пакеты - в <code>/usr/local/lib/python2.4/site-packages</code>.
+</p>
+
+<h2>Windows</h2>
+
+<h3>Информация к размышлению</h3>
+<p>Тут ситуация примерно такая же, но немного с другими нюансами. В Windows есть три способа поставить Python-пакет: инсталлятор, стандартный <code>python setup.py install</code> и eggs. Второй способ менее распространен, в силу того, что в случае C-расширения всё упирается в отсутствие C-компилятора под Windows, поэтому наибольшее распространение под Windows получил первый способ (ну и третий, с некоторых пор). По умолчанию пакеты, установленные любым из трех способов, помещаются в <code>C:\Python\Lib\site-packages</code> (полагая <code>C:\Python</code> каталогом, куда вы ставили Python). Как и в Linux, я бы советовал <strong>не смешивать</strong> пакеты, установленные разными способами и указать для eggs <strong>отдельное место</strong>, равно как и для &quot;ручной&quot; установки.
+</p>
+
+<h3>Пошаговые инструкции</h3>
+<p>Прежде чем ставить setuptools, нужно написать конфиг <code>~/pydistutils.cfg</code>. Но тут есть одно &quot;но&quot;: конфиг не будет считываться до тех пор, пока не определена переменная окружения <code>%HOME%</code>. Поэтому, прежде чем писать конфиг, настроим переменные окружения: <code>Мой компьютер-&gt;Свойства-&gt;Дополнительно-&gt;Переменные окружения</code>. Если у вас аккаунт администратора, то можете изменять общесистемные переменные. Если же у вам пользовательский аккаунт, то остаются переменные пользовательского уровня.
+</p>
+
+<table>
+    <tr><th>Переменная</th>      <th>Значение</th>                                            <th>Примечание</th></tr>
+    <tr><td><code>HOME</code></td>                 <td><code>c:\Documents and Settings\pythy</code></td>         <td>Вместо <code>pythy</code> указываете имя пользователя. Рекомендуется зайти в <code>D&amp;S</code> и посмотреть.</td></tr>
+    <tr><td><code>PATH</code></td>                   <td><code>c:\Python\egg\Scripts;c:\Python\local\Scripts;c:\Python\Scripts</code></td>                                <td>Добавляем в путь по умолчанию все каталоги, куда будут помещаться скрипты (соответственно, установлены как egg, "руками" и  инсталлятором)</td></tr>
+    <tr><td><code>PYTHONPATH</code></td>      <td><code>c:\Python\egg\Lib\site-packages;c:\Python\local\Lib\site-packages</code></td>                                  <td><code>c:\Python</code> - это место, куда установлен Python</td></tr>
+</table>
+
+<p>Проверяем в командной строке:
+</p>
+<pre><code>C:\&gt; echo %HOME%
+c:\Documents and Settings\pythy
+C:\&gt; echo %PATH%
+C:\WINDOWS;C:\WINDOWS\System32;C:\WINDOWS\System32\Wbem;c:\Python\egg\Scripts;c:\Python\local\Scripts;c:\Python\Scripts
+C:\&gt; echo %PYTHONPATH%
+c:\Python\egg\Lib\site-packages;c:\Python\local\Lib\site-packages
+</code></pre><p>Теперь в каталоге, который указали как <code>%HOME%</code> создаем конфигурационный файл <code>pydistutils.cfg</code> (без точки в начале имени!) примерно такого содержимого:
+</p>
+<pre><code>[install]
+prefix=c:\Python\egg
+</code></pre><p>Теперь создаем указанные в <code>%PATH%</code> и <code>%PYTHONPATH%</code> каталоги.
+</p>
+<p>Вроде всё. Поскольку setuptools в виде инсталлятора нет, то ставим в виде egg: скачиваем <a href="http://peak.telecommunity.com/dist/ez_setup.py">ez_setup.py</a> и запускаем:
+</p>
+<pre><code>C:\temp&gt; c:\Python\python.exe ez_setup.py
+Downloading http://cheeseshop.python.org/packages/2.4/s/setuptools/setuptools-0.6c3-py2.4.egg
+Creating c:\python\egg\Lib\site-packages\site.py
+Processing setuptools-0.6c3-py2.4.egg
+creating c:\python\egg\Lib\site-packages\setuptools-0.6c3-py2.4.egg
+Extracting setuptools-0.6c3-py2.4.egg to c:\python\egg\Lib\site-packages
+Adding setuptools 0.6c3 to easy-install.pth file
+Installing easy_install-script.py script to c:\python\egg\Scripts
+Installing easy_install.exe script to c:\python\egg\Scripts
+Installing easy_install-2.4-script.py script to c:\python\egg\Scripts
+Installing easy_install-2.4.exe script to c:\python\egg\Scripts
+
+Installed c:\python\egg\Lib\site-packages\setuptools-0.6c3-py2.4.egg
+Processing dependencies for setuptools==0.6c3
+</code></pre><p>После этого можете спокойно пользоваться <code>easy_install</code> для установки необходимых пакетов.
+</p>
+
+<h3>Установка пакетов &quot;вручную&quot;</h3>
+<p>Аналогично Linux-случаю, только stow для Windows нет, так что особого варианта у нас не остается, поэтому используем
+</p>
+<pre><code>C:\temp&gt; c:\Python\python.exe setup.py install --prefix=c:\Python\local
+</code></pre>
+<h2>О чем я не рассказал</h2>
+<p>Откуда собственно скачиваются пакеты. Описание пакетов ищутся на <a href="http://cheeseshop.python.org/pypi/">cheese shop</a>, сами пакеты берутся либо с cheese shop (если есть), либо с домашней страницы (поле &quot;Home page&quot; в описании), либо со страницы скачивания (поле &quot;Download page&quot; в описании). Если файл называется не в виде &quot;PackageName-version.tar.gz&quot; или &quot;PackageName-pyX.Y.egg&quot;, то <code>easy_install</code> не найдет его. Пример такого случая - <a href="http://cheeseshop.python.org/pypi/PIL">PIL</a> (на cheese shop пакет называется PIL, на странице скачивания - Imaging). Опцией <code>-f</code> можно указать URL для поиска пакетов.
+</p>
+<p>О недостатках. Во-первых, нет нормального способа удалить egg. Только вручную. Очень и очень глупо. Во-вторых, достаточно часто встречаются пакеты, авторы которых не умеют нормально собирать их (на вскидку, <a href="http://cheeseshop.python.org/pypi/Pythonutils">Pythonutils</a> в egg страшно кривой; да тот же <a href="http://djangoproject.com">Django-0.95</a> не ставится через <code>easy_install</code>). В-третьих, документация к setuptools такая, что чтобы что-то найти нужно перерыть ее всю. И не факт, что найдешь.
+</p>
+<p>Об интеграции с svn. При наличии установленной Subversion, setuptools умеет делать eggs из svn-срезов, а также работать в devel-режиме (когда пакет физически не копируется, а делается симлинк).
+</p>
+<p>О плагинах. В setuptools есть схема плагинов, называемая &quot;entry points&quot;, точками входа. Достаточно широко используется разработчиками <a href="http://www.turbogears.org">TurboGears</a>, <a href="http://www.pylonshq.com">Pylons</a>, <a href="http://pythonpaste.org">Paste</a>. Про это потом напишу отдельно.
+</p>
+{% endmark %}

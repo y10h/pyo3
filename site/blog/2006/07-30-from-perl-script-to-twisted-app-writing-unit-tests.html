@@ -1,0 +1,171 @@
+{% meta %}
+    tags: [testing, twisted, docs]
+    title: От Perl-скрипта к Twisted-приложению: Пишем юнит-тесты
+{% endmeta %}
+
+{% mark body %}
+<p>Сегодня пишем <a href="http://ru.wikipedia.org/wiki/%D0%AE%D0%BD%D0%B8%D1%82-%D1%82%D0%B5%D1%81%D1%82%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5">юнит-тесты</a> для нашего Twisted-приложения. У Twisted хорошая традиция полных юнит-тестов. Если исправляется ошибка, то обязательно пишется юнит-тест, который не проходит в оригинале и нормально завершается в исправленном варианте. 
+</p>
+<p>
+<!--more-->
+
+Методика <a href="http://ru.wikipedia.org/wiki/%D0%AD%D0%BA%D1%81%D1%82%D1%80%D0%B5%D0%BC%D0%B0%D0%BB%D1%8C%D0%BD%D0%BE%D0%B5_%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5">экстремального программирования</a>, предлагает писать юнит-тесты до написания кода. Я предпочитаю писать юнит-тесты по завершению функции/класса. Я использую юнит-тесты для контроля правильности реализации интерфейса и отсутствия повтора уже исправленных ошибок. Т.е. у меня на всех этапах (<a href="http://www.pyobject.ru/blog/post/from-perl-script-to-twisted-app-draft/">создание &quot;скелета&quot;</a>, <a href="http://gorod-omsk.ru/blog/pythy/2006/07/22/from-perl-script-to-twisted-app-making-app-async/">переход на асинхронную обработку</a>, <a href="http://gorod-omsk.ru/blog/pythy/2006/07/29/from-perl-script-to-twisted-app-unicode/">внедрение unicode</a>) были юнит-тесты, которые контролировали правильность реализации. Естественно, на каждом следующем этапе, предыдущие тесты &quot;ломались&quot;. Понятное дело, что изменения не подтверждались (commit) в системе контроля версий (я использую <a href="http://subversion.tigris.org/">Subversion</a>) до тех пор, пока все тесты корректно не завершались. 
+</p>
+<p>Пару слов о юнит-тестах в Twisted. Их обеспечивает пакет <a href="http://twistedmatrix.com/trac/wiki/TwistedTrial">twisted.trial</a>. API аналогичен стандартному <a href="http://docs.python.org/lib/module-unittest.html">unittest</a>, правда, добавляется пара-тройка особенностей:
+</p>
+<ul>
+ <li>
+     метод <code>tearDown</code> - метод для корректного завершения набора тестов
+ </li>
+ <li>
+     в случае, если тест возвращает Deferred, trial дожидается его завершения
+ </li>
+</ul>
+<p>Вдобавок, у trial есть договоренность о том, что юнит-тесты пакета <code>package</code> находится в <code>package.test</code>. И набор юнит-тестов для данного пакета запускается командой <code>trial package</code>.
+</p>
+<p>Итак, для последней версии (асинхронная обработка + unicode), я написал такие юнит-тесты для клиента:
+</p>
+<pre><code>from twisted.trial import unittest
+from TwistedPythy import clients
+
+class UnicodeDummyClientTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.client = clients.UnicodeDummyClient()
+
+    def test_getDummyClient(self):
+        self.assertEquals(u'Dummy_10', self.client.getClient(u'10'))
+
+    def test_getDummyStrippedClient(self):
+        # line with length &gt;20 must bet stripped
+        self.assertEquals(u'Dummy_1234567890abcd', self.client.getClient(u'1234567890abcdefgh'))
+
+    def test_getDummyClientNotUnicode(self):
+        # str instead of unicode raises AssertError
+        self.assertRaises(AssertionError, self.client.getClient, '10')
+</code></pre><p>Для протокола:
+</p>
+<pre><code>from twisted.trial import unittest
+from twisted.internet import protocol, defer
+
+from TwistedPythy import clients, proto
+
+from twisted.test.test_protocols import StringIOWithoutClosing as SIOWOC
+
+class TestAsyncUnicodePythyProto(proto.AsyncUnicodePythyProto):
+    &quot;&quot;&quot; AsyncUnicodePythyProto for unittests&quot;&quot;&quot;
+    def __init__(self):
+        self.deferred = defer.Deferred()
+        self.debug = False
+
+    def sendAnswer(self, *args, **kwargs):
+        proto.AsyncUnicodePythyProto.sendAnswer(self, *args, **kwargs)
+        self.deferred.callback('answer sent')
+
+class AsyncUnicodePythyProtoTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.p = TestAsyncUnicodePythyProto()
+        self.c = clients.UnicodeDummyClient()
+        self.f = proto.AsyncUnicodePythyFactory(self.c, 'koi8-r')
+        self.p.factory = self.f
+
+    def cbCheckReceived(self, res, data):
+        orig_data, pseudo_handler = data
+        self.assertEquals(orig_data, pseudo_handler.getvalue())
+
+    def test_sendLineUnicode(self):
+        s = SIOWOC()
+        self.p.makeConnection(protocol.FileWrapper(s))
+        self.p.sendLine(u'test')
+        self.assertEquals('test\r\n', s.getvalue())
+
+    def test_sendLineStr(self):
+        s = SIOWOC()
+        self.p.makeConnection(protocol.FileWrapper(s))
+        self.assertRaises(AssertionError, self.p.sendLine, 'test')
+
+    def test_sendAnswerUnicode(self):
+        s = SIOWOC()
+        self.p.makeConnection(protocol.FileWrapper(s))
+        self.p.sendAnswer(u'test')
+        self.assertEquals('\xd4\xc5\xd3\xd4test\r\n', s.getvalue())
+
+    def test_sendAnswerStr(self):
+        s = SIOWOC()
+        self.p.makeConnection(protocol.FileWrapper(s))
+        self.assertRaises(AssertionError, self.p.sendAnswer, 'test')
+
+    def test_lineReceived(self):
+        req = '0123456789abcdefghijk'
+        ans = '\xd4\xc5\xd3\xd4Dummy_abcde\r\n'
+        s = SIOWOC()
+        self.p.makeConnection(protocol.FileWrapper(s))
+        self.p.lineReceived(req)
+        self.p.deferred.addCallback(self.cbCheckReceived, (ans, s))
+        return self.p.deferred
+</code></pre><blockquote><p>Для выполнения юнит-тестов необходимо, чтобы пакет TwistedPythy был в <code>PYTHONPATH</code>. Т.е. в переменную <code>PYTHONPATH</code> нужно добавить путь к TwistedPythy.
+   Например, в Linux:
+</p>
+
+<p><code>pythy@axcel:~$ export PYTHONPATH=$PYTHONPATH:/home/pythy/blog/twistedpythy_04</code>
+</p>
+<p>в Windows:
+</p>
+<p><code>C:\&gt; set PYTHONPATH=%PYTHONPATH%;d:\pythy\blog\twistedpythy_04</code>
+</p>
+</blockquote><p>Ну а результат выполнения всех тестов выглядит так:
+</p>
+<pre><code>pythy@axcel:~$ trial TwistedPythy
+Running 21 tests.
+TwistedPythy.test.test_clients
+  DummyClientTestCase
+    test_getDummyClientStr ...                                             [OK]
+    test_getDummyClientUnicode ...                                         [OK]
+    test_getDummyStrippedClient ...                                        [OK]
+  UnicodeDummyClientTestCase
+    test_getDummyClientStr ...                                             [OK]
+    test_getDummyClientUnicode ...                                         [OK]
+    test_getDummyStrippedClient ...                                        [OK]
+TwistedPythy.test.test_proto
+  AsyncPythyProtoTestCase
+    test_lineReceived ...                                                  [OK]
+    test_sendAnswerStr ...                                                 [OK]
+    test_sendAnswerUnicode ...                                             [OK]
+    test_sendLineStr ...                                                   [OK]
+    test_sendLineUnicode ...                                               [OK]
+  AsyncUnicodePythyProtoTestCase
+    test_lineReceived ...                                                  [OK]
+    test_sendAnswerStr ...                                                 [OK]
+    test_sendAnswerUnicode ...                                             [OK]
+    test_sendLineStr ...                                                   [OK]
+    test_sendLineUnicode ...                                               [OK]
+  PythyProtoTestCase
+    test_lineReceived ...                                                  [OK]
+    test_sendAnswerStr ...                                                 [OK]
+    test_sendAnswerUnicode ...                                             [OK]
+    test_sendLineStr ...                                                   [OK]
+    test_sendLineUnicode ...                                               [OK]
+
+-------------------------------------------------------------------------------
+</code></pre><p>Отмечу, что тесты выполняются в алфавитном порядке, т.е. не в том порядке, в каком я их писал. Поэтому, требование изолированности (результат выполнения теста не влияет на другие тесты) вытекает само-собой.
+</p>
+<p>Еще обращу ваше внимание на то, как пишутся тесты для асинхронных событий - если сделать как в сихронном варианте:
+</p>
+
+<pre><code>self.p.lineReceived(req)
+self.assertEquals(ans, s.getvalue())
+</code></pre><p>то такой тест будет проваливаться, в силу того, что ответ &quot;в линию&quot; будет даваться <strong>позже</strong> чтения из линии. Т.е. <code>s.getvalue()</code> будет снимать показания до того, как <code>sendAnswer()</code> пошлет ответ. Чтобы этого не происходило, нужно &quot;дожидаться&quot;, пока <code>sendAnswer()</code> не выполниться и только после этого считывать данные &quot;с линии&quot;. Для этого я создал дочерний класс <code>TestAsyncPythyProto</code>, у которого отдельным атрибутом завел <code>deferred</code>, выполняемый при посылке ответа. А в тесте просто добавил callback для проверки значений - <code>cbCheckReceived</code> и возвращаю <code>deferred</code>.
+
+</p>
+<pre><code>self.p.lineReceived(req)
+self.p.deferred.addcallback(self.cbCheckReceived, (ans, s))
+return self.p.deferred
+</code></pre><p>Как я уже выше говорил, trial, получив Deferred-объект от теста, &quot;знает&quot;, что с ним делать и вполне корректно обрабатывает тест.
+</p>
+<p>При создании этих тестов основными сложностями было именно Twisted-специфика: как &quot;подключать&quot; протокол к тесту, как работать с Deferred-объектами. Когда уже написал тесты, то понял, что дело не в сложности Twisted, а в малой документированности twisted.trial: в <a href="http://twistedmatrix.com/projects/core/documentation/howto/policy/test-standard.html">документации Twisted</a> о нем <a href="http://twistedmatrix.com/projects/core/documentation/howto/testing.html">говорится</a> весьма кратко, а в книге <a href="http://cqc.univer.omsk.ru/j2a/python/doc/eng/o%27reilly%20-%20twisted%20network%20programming%20essentials.zip">Twisted Essentials</a> вообще ничего. Поэтому основным источником был код Twisted и <a href="http://twistedmatrix.com/trac/browser/trunk/twisted/test">юнит-тесты</a> к нему.
+
+</p>
+<p>Надеюсь, что данный пост хоть чуть-чуть поможет вам в освоении twisted.trial. Как всегда, код можно взять на <a href="http://rapidshare.de/files/27463825/twistedpythy_04.zip.html">RapidShare</a>
+</p>
+{% endmark %}

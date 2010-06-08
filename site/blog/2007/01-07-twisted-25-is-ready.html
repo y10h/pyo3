@@ -1,0 +1,25 @@
+{% meta %}
+    tags: [twisted, versions]
+    title: Twisted 2.5 готов
+{% endmeta %}
+
+{% mark body %}
+Сегодня обновляя <a href="http://twistedmatrix.com">Twisted</a> с svn, заметил, что поменялась версия с 2.4.0 на 2.5.0. Это означает что фактически Twisted-2.5 готов. Да, новости на <a href="http://twistedmatrix.com">twsitedmatrix.com</a> еще нет и в <a href="http://twistedmatrix.com/cgi-bin/mailman/listinfo/twisted-python">twisted-python</a> всё тихо, но фактически релиз близок. Я думаю, разработчики еще скажут о новых возможностях Twsited, однако что я уже заметил по сравнению с 2.4:
+<ul>
+<li>К уже существующим схемам развертывания Twisted-приложения добавилась новая - "безтапочная". Я уже <a href="http://www.pyobject.ru/blog/post/twisted-application-deployment/">говорил</a> об этом. Хотя бы ради этого следует использовать 2.5 вместо 2.4<li>
+<li>По изменениям в коде, вроде как улучшили поддержку различного типа реакторов (epoll, kevent, CFRunLoops)</li>
+</ul>
+
+Что касается обратной совместимости, то вроде всё в порядке. По крайней мере, в своих (двух) проектах я не заметил проблем. В любом случае, ждем официального анонса Twisted-2.5.
+
+Однако хотелось бы предостеречь поклонников Twisted от преждевременной радости. Дело в том, что смена версии в первую очередь касается Twisted Core. Все остальные компоненты увеличивают minor-версию на единичку скорее по инерции, чем по необходимости. Настораживает еще тот факт, что Twisted Matrix lab перестала выпускать release-версии (например, 2.4.1), а сразу меняет minor-версии (т.е. 2.4.0 на 2.5.0). С другой стороны, особых альтернатив Twisted нет (ни <a href="http://www.nightmare.com/medusa/">Medusa</a>, ни <a href="http://kamaelia.sourceforge.net/">Kamaelia</a> не выглядят "аппетитно"), так что ждем-с.
+
+<strong>Upd:</strong> <a href="http://twistedmatrix.com/trac/browser/tags/releases/twisted-core-2.5.0/twisted/topfiles/NEWS?format=raw">нашел</a> в trac новые фишки Twisted-2.5 (помимо вышеупомянутых):
+<ul>
+<li>Добавлена поддержка Python-2.5</li>
+<li>Подчищен старый (остатки от Twisted-1.3) код интерфейсов (с версии 2.0 используется <code>zope.interface</code>)</li>
+<li>Добавлен <a href="http://twistedmatrix.com/trac/browser/tags/releases/twisted-core-2.5.0/twisted/protocols/amp.py">протокол AMP</a> (Asynchronous Messaging Protocol), эдакий "ответ XMLRPC от Twisted Matrix"</li>
+</ul>
+
+В общем и целом, 2.5 - "эволюционный" релиз Twisted, ничего принципиально нового добавлено не было.
+{% endmark %}

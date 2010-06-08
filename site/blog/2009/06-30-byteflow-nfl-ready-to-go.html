@@ -1,0 +1,117 @@
+{% meta %}
+    tags: [mine, byteflow]
+    title: Byteflow-NFL готов
+{% endmeta %}
+
+{% mark body %}
+<p>Для тех кто в теме: <a href="http://bitbucket.org/j2a/byteflow-nfl/">byteflow-nfl</a> готов
+к вливанию в <a href="http://hg.piranha.org.ua/byteflow/">основную ветку</a> разработки <a href="http://byteflow.su">Byteflow</a>.</p>
+
+<p>Теперь для оставшихся 99.1% (посчитано точными научными методами с привлечением аппарата математической статистики) читателей расскажу подробнее.</p>
+
+<!--more-->
+
+<p>Я отдельно не анонсировал смену движка сайта, так что немного предыстории.
+После переезда на отдельный домен я использовал наколенный блог-движок на
+<a href="http://pylonshq.com/">Pylons</a> и <a href="http://github.com/gldnspud/schevo/">Schevo</a>, потом Schevo был заменен на <a href="http://sqlalchemy.org">SQLAlchemy</a>. Но в итоге,
+я устал от поддержки такого решения и принял решение присоединиться к 
+существующему проекту. Таким проектом оказался <a href="http://byteflow.su">Byteflow</a>, так что я переехал именно на этот движок. Для сохранения обратной совместимости
+по урлам, пришлось несколько модифицировать его, так что я завел отдельную
+ветку <a href="http://bitbucket.org/j2a/byteflow-pyo/">byteflow-pyo</a>, которую
+периодически обновляю с <a href="http://hg.piranha.org.ua/byteflow/">основного репозитория</a>.</p>
+
+<p>Еще во времена наколенного блог-движка у меня были кое-какие мысли по поводу,
+что же я хочу еще видеть на сайте кроме собственно <a href="http://pyobject.ru/blog/">блога</a>.
+<a href="http://pyobject.ru/projects/">Проекты</a> выросли сами собой и изначально не задумывались ;-)
+Зато хотелось <a href="http://pyobject.ru/friends/">френд-ленту</a> и
+<a href="http://pyobject.ru/life/">агрегатор личной активности</a> (задумки этим не ограничиваются).
+Результат понравился не только мне, так что <a href="http://piranha.org.ua">piranha</a> и <a href="http://curvedbrain.org/">helge</a> сподвигли меня на
+перенос friends и life в основную ветку byteflow. Для решения этой задачи я и завел
+ветку <a href="http://bitbucket.org/j2a/byteflow-nfl/">byteflow-nfl</a>, которая сейчас
+и готова к вливанию в основной репозиторий byteflow.</p>
+
+<p>Теперь чуть подробнее о том, что такое nebula, friends и life.</p>
+
+<h2>Nebula</h2>
+
+<p>nebula -- это "движок" для фид-агрегаторов, какими и являются friends и life.
+Основан он на коде <a href="http://code.google.com/p/django-galaxy/">django-galaxy</a>,
+отсюда и такое название. Позже стало ясно, что лучше бы с нуля написал,
+целее было бы. Но анти-<a href="http://en.wikipedia.org/wiki/Not_Invented_Here">nih</a> синдром сработал,
+так что теперь есть то, что есть.
+В итоге, nebula предоставляет базовые модели, от которых удобно наследоваться и
+команду для сбора фидов, либо всех сразу, либо для отдельного приложения.
+Команда нужна для того чтобы можно было удобно обновлять фиды по cron'у. К примеру,
+у меня фид для friends по cron'у забирается раз в 3 часа, а фид life -- каждые 30 минут.</p>
+
+<h2>Friends</h2>
+
+<p>friends -- это блогролл, френд-лента, планета друзей, фидролл, называйте как угодно.
+Смысл в том, что это приложение, которое делает:</p>
+
+<ul>
+<li>блогролл для сайдбара (знает про <a href="http://www.opml.org/">OPML</a> и <a href="http://gmpg.org/xfn/">XFN</a>)</li>
+<li>френд-ленту</li>
+<li>фид</li>
+</ul>
+
+<p>Т.е. вы указываете блоги, которые читаете, а friends делает всё остальное. Я, например,
+вместо подписки на десяток не сильно часто обновляемых фидов подписался
+на <a href="http://feeds.feedburner.com/pyobject/friends">агрегированный фид</a>, который получается при помощи friends, при этом сразу
+же получаю блогролл и меня не терзают "дай ссылки на python-блоги", благо opml
+делается "бесплатно" :-)</p>
+
+<p>В byteflow уже было приложение blogroll, но friends более "правильное", так что
+blogroll считается устаревшим и есть инструмент для переноса данных из blogroll в friends.</p>
+
+<h2>Life</h2>
+
+<p>life -- это агрегатор личной активности на <a href="http://pyobject.ru/blog/2009/05/17/public-services-with-feeds/">публичных сервисах</a>,
+где информация об активности пользователя отдается в виде фидов. Перед тем как
+начать, я, естественно, посмотрел уже <a href="http://code.google.com/p/jellyroll/">существующие</a> <a href="http://code.google.com/p/agroapp/">проекты</a>, но они делают упор
+на использование нативных API разнородных сервисов. Я же предпочитаю использовать фиды. Это и плюс (однородный способ получения
+информации о событиях), это и минус (по API можно получить более подробную информацию,
+к примеру twitter в фиде не отдает, является ли текущий твит ответом на чью-то реплику, или нет).
+Таким образом, уже "из коробки" life умеет агрегировать информацию с любого сервиса, даже
+если нет специального <a href="http://bitbucket.org/j2a/byteflow-nfl/src/tip/apps/life/adapters/">адаптера</a>, знающего как фильтровать и преобразовать фид для лучшей читаемости.</p>
+
+<h2>Как это попробовать</h2>
+
+<p>Если у вас есть возможность и желание, то было бы очень здорово получить фидбек.</p>
+
+<p>Ниже инструкция, как опробовать friends и life на локальной машине</p>
+
+<p>Прежде чем начать, следует удовлетворить <a href="http://byteflow.su/docs/install.html#dependencies">зависимости</a> Byteflow, плюс для NFL еще нужен <a href="http://www.feedparser.org/">feedparser</a>.</p>
+
+<p>Далее, нужно раздобыть byteflow-nfl:</p>
+
+<pre><code>$ hg clone http://bitbucket.org/j2a/byteflow-nfl/
+</code></pre>
+
+<p>или скачать <a href="http://bitbucket.org/j2a/byteflow-nfl/get/tip.zip">zip-архив</a></p>
+
+<p>Взяв за основу <code>settings_local.py.template</code>, написать локальный конфигурационный файл <code>settings_local.py</code>: </p>
+
+<ul>
+<li>указать имя БД в <code>DATABASE_NAME</code>, например <code>'dev.db'</code></li>
+<li>в <code>STATIC_PAGES</code> добавить записи для ссылок на friends и life:
+<ul>
+<li><code>('Life', '/life/', u'My activities'),</code> для life</li>
+<li><code>('Friends', '/friends/', u'Blogs I\'m reading'),</code> для friends</li>
+</ul></li>
+<li>раскомментировать <code>nebula</code>, <code>friends</code> и <code>life</code> в <code>ADDITIONAL_APPS</code></li>
+</ul>
+
+<p>Дальше </p>
+
+<pre><code>$ python manage.py syncdb
+</code></pre>
+
+<p>и пробовать с dev-сервером ;-)</p>
+
+<p>Если вы уже используете Byteflow и желаете попробовать friends и life в своем
+блоге, то скоро будет готова инструкция по обновлению ;-) Хотя можете начать
+уже сейчас, а вопросы по обновлению задавать в Jabber-конференции <a href="xmpp:byteflow@conference.jabber.ru">byteflow</a></p>
+
+<p><small>P.S. Про точные научные методы -- это шутка, я просто знаю количество людей, кому я рассказывал про NFL, а FeedBurner знает количество читателей ;-)</small></p>
+{% endmark %}

@@ -1,0 +1,40 @@
+{% meta %}
+    tags: [turbogears, rhubarbtart, cherrypy, nevow, wsgi, paste]
+    title: Две вишенки для гиков
+{% endmeta %}
+
+{% mark body %}
+<p>Я не использую CherryPy, и в ближайшем будущем не планирую. Но эти два проекта привлекли своей нестандартностью.
+</p>
+
+<h2>RhubarbTart - WSGIsh CherryPy</h2>
+<p><a href="http://rhubarbtart.org/">RhubarbTart</a> - это &quot;стиль CherryPy на WSGI-движке&quot;. То есть внешний API от CherryPy, но сделано на <a href="http://www.pythonpaste.org">Paste</a>.
+</p>
+
+<p>Слово автору - Джулиану Краузе:
+</p>
+<blockquote>
+<p>Q. Зачем еще один фреймворк?<br>
+   A. RhubarbTart не новый фреймворк, это комбинация двух существующих фреймворков: пользовательский API и структура кода CherryPy, и инфраструктура Paste. Пересмотр старых вещей ради создания новых - необходимое условие эволюции.
+</p>
+<p>Q. Получится ли просто поместить свой CherryPy-код в RhubarbTart?<br>
+   A. Скорее всего нет. Хотя RhubarbTart по возможности использует имена и методы CherryPy, он не реализует все возможности CherryPy. Больше всего нареканий к тому, что не реализованы фильтры. Мы надеемся, что большинство фильтров можно заменить декораторами или WSGI middleware.
+</p>
+</blockquote>
+<h2>TurboGears new traversal - Cherrie Nevow</h2>
+<p><a href="https://projects.isotoma.com/tgnewtraversal">TGNewTraversal</a> - управление URLами в <a href="http://www.pyobject.ru/blog/post/intro-to-nevow/">стиле Nevow</a> в TurboGears/CherryPy-приложениях.
+
+</p>
+<p>Вот что говорит Даг Винтер о своём проекте:
+</p>
+<blockquote><p>Если вы создаете крупное, сложное приложение, вам нужен полный контроль над обходом (имеется ввиду обход методов контроллера при определении, какой метод будет &quot;работать&quot; для данного URLа, англ. traversal - <em>прим. pythy</em>), и CherryPy не дает такой возможности. Для того, чтобы механизм обхода нормально работал, необходимо зафиксировать компоненты URLа. Если же вы хотите, чтобы компоненты URLа могли меняться, то придется писать <a href="http://entitycrisis.blogspot.com/2007/02/restful-turbogears.html">много кода</a>, большая часть которого - &quot;борьба&quot; с CherryPy.
+</p>
+<p>По мне это большой недостаток приложения, которое в остальном весьма приятно. [...]
+</p>
+
+<p>Основная альтернатива - использовать <a href="http://routes.groovie.org/">Routes</a>, портированный с <a href="http://www.rubyonrails.org/">Rails</a>. Я упоминаю его, но мне очень не нравится такой подход - я думаю, что регулярные выражения - не лучший способ решения архитектурных проблем.
+</p>
+<p>Так что встречайте TGNewTraversal. Я взял код механизма обхода из <a href="http://www.divmod.org/trac/wiki/DivmodNevow">Nevow</a>, на мой взгляд, это лучший способ обхода. Я немного &quot;допилил&quot; его для большей дружелюбности к CherryPy. <a href="https://projects.isotoma.com/tgnewtraversal/browser/trunk/TGNewTraversal/tgnewtraversal/__init__.py">Совсем немного кода</a> нужно для того, чтобы приобщиться к грамотной концепции обхода из Nevow.
+</p>
+</blockquote>
+{% endmark %}

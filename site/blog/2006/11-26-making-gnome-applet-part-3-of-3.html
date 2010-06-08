@@ -1,0 +1,247 @@
+{% meta %}
+    tags: [docs, pygtk, gnome]
+    title: Создание апплета GNOME: заключительная часть
+{% endmeta %}
+
+{% mark body %}
+<p>Заканчиваем с апплетом к GNOME. В <a href="http://www.pyobject.ru/blog/post/making-gnome-applet-part-1-of-3/">первых</a> <a href="http://gorod-omsk.ru/blog/pythy/2006/11/06/making-gnome-applet-part-2-of-3/">двух</a> частях работали над структурой апплета и его наполнением, сегодня завершающий этап: &quot;отшлифовка&quot; внешнего вида и подготовка к многоязычному окружению.
+</p>
+
+<!--more-->
+
+<h2>Внешний вид</h2>
+
+<p>Общая структура апплета аналогична таковой во второй части: наследуемся от <code>ProxyGnomeApplet</code>:
+</p>
+<pre><code>class ProxySwitcherGnomeApplet(ProxyGnomeApplet)
+</code></pre><p>И переопределяем нужные методы. Во-первых, роль главного виджета играет <code>gtk.Image</code>, а не <code>gtk.Label</code> как в &quot;модельном&quot; апплете.
+</p>
+<pre><code>def init_additional_widgets(self):
+    &quot;&quot;&quot;Create additional widgets&quot;&quot;&quot;
+    self._init_pixbufs()
+    self.image = gtk.Image()
+    self.ev_box.add(self.image)
+</code></pre><p><code>gtk.Image</code> это некий &quot;контейнер&quot; изображения. Его можно &quot;заполнить&quot; данными из различных источников, мы будем использовать  пиксельный буфер (pixbuf). Само изображение (как пиксельный буфер) будем брать из значка &quot;Прокси&quot; текущей темы. Если в текущей теме не будет такой иконки - будем использовать тему Tango.
+</p>
+<pre><code>def _init_pixbufs(self):
+    &quot;&quot;&quot;Init pixbufs from current theme, or from Tango, if 'proxy' icon not in current theme&quot;&quot;&quot;
+    self.pixbufs = {}
+    self.theme = self._get_theme()
+    try:
+        self._reload_pixbufs()
+    except gobject.GError:
+        self.theme = self._get_theme('Tango')
+        self._reload_pixbufs()
+</code></pre><p>Мы будем использовать словарь <code>pixbufs</code> для хранения пиксельных буферов для включенного и выключенного состояния прокси. В первой строке мы инициализируем этот словарь. Во второй - получаем текущую тему. Потом пробуем подгрузить значок &quot;Прокси&quot; из текущей темы (<code>self._reload_pixbufs()</code>), если такого значка нет (исключение <code>gobject.GError</code>), то используем тему Tango и уже с нее загружаем значок.
+</p>
+<p>Название текущей темы берем из GConf, ключ <code>/desktop/gnome/interface/icon_theme</code>:
+
+</p>
+<pre><code>def _get_theme(self, name=None):
+    &quot;&quot;&quot;Return a theme by name, or current one if name is None&quot;&quot;&quot;
+    if name is None:
+        name = gconf.client_get_default().get_string('/desktop/gnome/interface/icon_theme')
+    theme = gtk.IconTheme()
+    theme.set_custom_theme(name)
+    return theme
+</code></pre><p>В методе <code>_reload_pixbufs</code> мы решаем сразу несколько задач:
+</p>
+<ul>
+ <li><p>подгружаем значок для включенного прокси (как пиксельный буфер) из текущей темы
+</p>
+
+ </li>
+
+ <li><p>на основе полученного изображения формируем пиксельный буфер для выключенного прокси
+</p>
+ </li>
+</ul>
+<pre><code>def _reload_pixbufs(self, size=None):
+       &quot;&quot;&quot;Reload pixbufs from current theme for specified size, or for panel's size if size is None&quot;&quot;&quot;
+       if size is None:
+           size = self.applet.get_size()
+       pixbuf = self.theme.load_icon('proxy', size, gtk.ICON_LOOKUP_FORCE_SVG)
+       faded_pixbuf = gtk.gdk.Pixbuf(pixbuf.get_colorspace(),
+                   pixbuf.get_has_alpha(),
+                   pixbuf.get_bits_per_sample(),
+                   pixbuf.get_width(),
+                   pixbuf.get_height())
+       pixbuf.saturate_and_pixelate(faded_pixbuf, 1, True)
+       self.pixbufs[True] = pixbuf
+       self.pixbufs[False] = faded_pixbuf
+</code></pre>
+
+<p>И вот в этом коде четко проявляется, что PyGTK - лишь &quot;прослойка&quot; между Python и C-библиотекой GTK: для того чтобы получить &quot;затемненный&quot; пиксельный буфер (<code>faded_pixbuf</code>) нужно воспользоваться методом <code>saturate_and_pixelate</code> объекта <code>gtk.gdk.Pixbuf</code>, причем метод ничего не возвращает, а &quot;затемненный&quot; пиксельный буфер должен быть передан первым параметром. Что еще более не типично для Python - он обязательно должен быть типа <code>gtk.gdk.Pixbuf</code>. Т.е. нельзя, скажем, инициализировав новый пиксельный буфер значением <code>None</code>, передать его методу <code>saturate_and_pixelate</code> - будет ошибка несовпадения типов. Еще один момент - объект <code>gtk.gdk.Pixbuf</code> не получиться скопировать при помощи <code>copy.deepcopy()</code> - опять таки по причине C-природы GTK. Поэтому приходится абсолютно неестественно для Python создавать новый пиксельный буфер, передавая конструктору <code>gtk.gdk.Pixbuf</code> параметры исходного пиксельного буфера. И уже этот, новый пиксельный буфер, &quot;отдавать&quot; <code>saturate_and_pixelate</code>.
+
+</p>
+<p>Все остальное в этом методе достаточно просто: в самом начале, если не передан параметр <code>size</code>, то берем размер панели, на которую помещается данный апплет (<code>self.applet.get_size()</code>); а в самом конце сохраняем полученные пиксельные буферы в словарь <code>pixbufs</code>.
+</p>
+<p>Теперь нужно переопределить методы <code>after_init</code> где инициализируется начальное состояние апплета и callback-функции <code>_cb_proxy_change</code> на переключение прокси и <code>on_enter</code> на попадание курсора мыши внутрь апплета. Ну и неплохо было бы изменить диалог &quot;О программе&quot;, переопределив <code>on_ppm_about</code>.
+
+</p>
+<pre><code>def after_init(self):
+    &quot;&quot;&quot;Init additional attributes of applet&quot;&quot;&quot;
+    self.proxy = ProxyGconfClient(callback=self._cb_proxy_change)
+    self.proxy_state = self.proxy.get_state()
+    self.proxy_is_on = self.proxy.is_on()
+    self.set_visual_state(self.proxy_state, self.proxy_is_on)
+    self.button_actions[1] = self.switch_proxy
+</code></pre><p>Метод <code>after_init</code> повторяет таковой у класса <code>ProxyGnomeApplet</code> за небольшими изменениями: дополнительно в атрибут <code>proxy_is_on</code> записываем данные, включен ли прокси; визуальное состояние апплета устанавливается методом <code>set_visual_state</code>.
+
+</p>
+<pre><code>def set_visual_state(self, state, is_on):
+    &quot;&quot;&quot;Set overall visual state for corresponding proxy's state&quot;&quot;&quot;
+    msg_on_state = u&quot;Proxy is on&quot;
+    msg_off_state = u&quot;Proxy is off&quot;
+    mode = u&quot;mode: %s&quot; % state
+    variant = (is_on and msg_on_state) or msg_off_state
+    self.info = u&quot;%s (%s)&quot; % (variant, mode)
+    self._set_image(is_on)
+
+def _set_image(self, kind):
+    &quot;&quot;&quot;Set image for specified state&quot;&quot;&quot;
+    self.image.set_from_pixbuf(self.pixbufs[kind])
+</code></pre><p>Здесь код незамысловат: в начале формируются строки всплывающей подсказки, в зависимости от значения параметра <code>is_on</code> выбирается текст &quot;Proxy is on&quot; или &quot;Proxy is off&quot;. Дополнительно, в скобках отображается режим (параметр <code>state</code>). Последняя строка - установка соответствующего значка (метод <code>_set_image</code>). Ну а в методе <code>_set_image</code> - заполнение контейнера <code>gtk.Image</code> данными из пиксельного буфера. Какой пиксельный буфер (из двух, что хранятся в <code>self.pixbufs</code>) использовать определяет переданный параметр <code>kind</code>.
+
+</p>
+<p>Следующая пара методов, который нужно переопределить, это <code>_cb_proxy_change</code> и <code>on_enter</code> - callback-функции на переключение прокси и на попадание указателя мыши в апплет. Тут очень просто и понятно:
+</p>
+<pre><code>def _cb_proxy_change(self, client, cnxn_id, entry, params):
+    &quot;&quot;&quot;Callback for changing proxy, change visual state of applet&quot;&quot;&quot;
+    self.proxy_state = self.proxy.get_state()
+    self.proxy_is_on = self.proxy.is_on()
+    self.set_visual_state(self.proxy_state, self.proxy_is_on)
+
+def on_enter(self, widget, event):
+    &quot;&quot;&quot;Callback for 'on-enter' event, show tooltip&quot;&quot;&quot;
+    self.tooltips.set_tip(self.ev_box, self.info)
+
+</code></pre><p>И последний метод, это показ диалога &quot;О программе&quot;. Здесь мы используем стандартный виджет <code>gnome.ui.About</code>. Параметры конструктора у него такие: имя приложения, версия, лицензия, краткое описание, список авторов, список авторов документации, переводчики, логотип. Версия, лицензия и автор у нас указаны в начале файла, в &quot;магических&quot; переменных <code>__version__</code>, <code>__license__</code> и <code>__author__</code>. В качестве логотипа используем все тот же значок &quot;Прокси&quot; из текущей темы, только бОльшего размера (80 пикселов). Все остальное понятно из кода:
+
+</p>
+<pre><code>def on_ppm_about(self, event, data=None):
+    &quot;&quot;&quot;Callback for pop-up menu item 'About', show About dialog&quot;&quot;&quot;
+    pixbuf_logo = self.theme.load_icon('proxy', 80, gtk.ICON_LOOKUP_FORCE_SVG)
+    msg_applet_name = u&quot;Proxy switcher&quot;
+    msg_applet_description = u&quot;Applet for turning proxy on/off&quot;
+    gnome.ui.About(msg_applet_name, __version__, __license__,
+                   msg_applet_description,
+                   [__author__,],   # programming
+                    None,   # documentation
+                    None,   # translating
+                    pixbuf_logo,
+                   ).show()
+</code></pre><p>С внешним видом вроде бы все.
+</p>
+<blockquote><p>Здесь я намеренно опустил некоторые вещи, чтобы не перегружать код непринципиальными моментами:
+
+</p>
+<ul>
+ <li>
+     Реакция апплета на изменение ориентации панели - сигнал <code>change-orient</code>
+ </li>
+
+ <li>
+     Реакция апплета на изменение размера панели - сигнал <code>change-size</code>
+
+ </li>
+
+ <li>
+     Реакция апплета на изменение фона панели - сигнал <code>change-background</code>
+ </li>
+</ul>
+<p>Примеры callback-функций на эти сигналы (а они идентичны у большинства апплетов) можно найти при помощи Google Codesearch: например, для <a href="http://www.google.com/codesearch?q=lang:py+gnomeapplet+change-orient">change-orient</a>.
+</p></blockquote>
+
+<h2>Многоязычное окружение</h2>
+<p>Для &quot;апплета на коленке&quot; допустимо, чтобы он работал только на языке создателя. Если же есть желание показать апплет хотя бы одному другу, то резонно задуматься о работе в многоязычном окружении. Стандартный инструмент для таких вещей - <a href="http://www.gnu.org/software/gettext/">GNU gettext</a>. В Python есть <a href="http://docs.python.org/lib/module-gettext.html">его поддержка</a>. Во время разработки программы особо ничего не меняется, лишь у каждой строки, которую нужно перевести, появляется &quot;обертка&quot; <code>_()</code>.
+</p>
+<p>В нашем случае, нужно переводить: всплывающие подсказки (в методе <code>set_visual_state</code>) и название программы, ее описание (в методе <code>on_ppm_about</code>). Делаем:
+
+</p>
+<pre><code>import gettext
+gettext.install('proxyswitcher', unicode=True)
+
+[...]
+    def set_visual_state(self, state, is_on):
+        &quot;&quot;&quot;Set overall visual state for corresponding proxy's state&quot;&quot;&quot;
+        msg_on_state = _(u&quot;Proxy is on&quot;)
+        msg_off_state = _(u&quot;Proxy is off&quot;)
+        mode = _(u&quot;mode: %s&quot;) % state
+        variant = (is_on and msg_on_state) or msg_off_state
+        self.info = u&quot;%s (%s)&quot; % (variant, mode)
+        self._set_image(is_on)
+
+    def on_ppm_about(self, event, data=None):
+        &quot;&quot;&quot;Callback for pop-up menu item 'About', show About dialog&quot;&quot;&quot;
+
+        pixbuf_logo = self.theme.load_icon('proxy', 80, gtk.ICON_LOOKUP_FORCE_SVG)
+        msg_applet_name = _(&quot;Proxy switcher&quot;)
+        msg_applet_description = _(&quot;Applet for turning proxy on/off&quot;)
+        gnome.ui.About(msg_applet_name, __version__, __license__,
+                       msg_applet_description,
+                       [__author__,],   # programming
+                        None,   # documentation
+                        None,   # translating
+                        pixbuf_logo,
+                       ).show()
+</code></pre><p>Первым параметром в <code>gettext.install</code> идет название домена переводов - обычно совпадает с именем программы.
+</p>
+<p>Отмечу один момент: в случае использования подстановок в строки стоит избегать конструкций <code>_(u&quot;some string %s with subst&quot; % value)</code> по той причине, что при извлечении строк для перевода, будет извлечена строка <code>u&quot;some string %s with subst&quot;</code>, а во время работы программы будет искаться перевод для строки с уже подставленным значением <code>value</code>, поэтому лучше вынести операцию подстановки значения &quot;за скобки&quot;, т.е. <code>_(u&quot;some string %s with subs&quot;) % value</code>.
+
+</p>
+<p>Теперь нужно извлечь строки, которые нужно перевести. И здесь есть некоторая неопределенность. В том смысле, что нет только одного способа выполнить эту операцию. Можно использовать &quot;канонические&quot; инструменты GNU gettext, можно использовать инструменты Python. Я приведу пример использования Python-инструментов - не только в силу специфики блога, но и по причине лучшей переносимости. Итак, делаем:
+</p>
+<pre><code>pythy@axcel:~/blog/gnome-applet/gnomeapplet_03$ pygettext -v -o po/proxyswitcher.pot proxyswitcher.py
+Working on proxyswitcher.py
+</code></pre><p><code>pot</code>-файл - это шаблон, так что копируем его в файл перевода <code>po</code>:
+</p>
+<pre><code>pythy@axcel:~/blog/gnome-applet/gnomeapplet_03$ cp po/proxyswitcher.pot po/ru/proxyswitcher.po
+</code></pre><p>Теперь редактируем параметры перевода (в файле перевода есть &quot;рыба&quot;) и собственно сам перевод. Далее, &quot;компилируем&quot; в <code>mo</code>-файл. В качестве &quot;компилятора&quot; <code>msgfmt.py</code> (для Debian и Ubuntu он доступен в пакете <code>python2.4-doc</code>):
+
+</p>
+<pre><code>pythy@axcel:~/blog/gnome-applet/gnomeapplet_03$ msgfmt.py -o po/ru/proxyswitcher.mo po/ru/proxyswitcher.po
+</code></pre><p>&quot;Инструментальный&quot; этап завершен. Теперь появляется резонный вопрос: как использовать данный перевод? И здесь опять неоднозначность: Python по умолчанию ищет переводы в /usr/share/locale, однако есть возможность указать другое место, где искать переводы - передать имя каталога вторым параметром в <code>gettext.install</code>:
+</p>
+<pre><code>import gettext
+gettext.install('proxyswitcher', os.path.dirname(os.path.abspath(__file__)), unicode=True)
+</code></pre><p>в данном примере переводы ищутся в той же директории, где и располагается программа. Однако стоит предостеречь о том, что в данном каталоге нужно положить файл перевода не просто так, а по соглашению <code>&lt;targetdir&gt;/&lt;lang&gt;/LC_MESSAGES/&lt;domain&gt;.mo</code>, где <code>&lt;targetdir&gt;</code> - каталог, где ищутся переводы (текущий каталог), <code>&lt;lang&gt;</code> - двухбуквенный код языка (ru), <code>&lt;domain&gt;</code> - домен перевода (proxyswitcher). И вот по вот этому соглашению, кладем файл <code>proxyswitcher.mo</code> в каталог <code>ru/LC_MESSAGES/proxyswitcher.mo</code>. Еще один момент, на который стоит обратить внимание - все строки unicode, и в <code>gettext.install</code> тоже указываем опцию <code>unicode</code>, иначе строка будет подставлена &quot;как есть&quot;, без перекодировки (т.е. если я создавал файл перевода в коировке UTF-8, а пользователь запустит программу в KOI8-R окружении, то подставлены будут переведенные строки в UTF-8).
+
+</p>
+
+<h2>Результат</h2>
+<p>Пробуем собрать всё воедино и посмотреть, что получилось. Если я нигде не ошибся и вы нигде не опечатались, то результат должен быть таков:
+</p>
+<p>
+<a rel="attachment" class="imagelink" href="http://www.pyobject.ru/blog/post/making-gnome-applet-part-3-of-3/dialog-add-to-panel/" title="Dialog 'add to panel'"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/11/applet_addto.thumbnail.png" alt="Dialog 'add to panel'" /></a>
+
+<a rel="attachment" class="imagelink" href="http://www.pyobject.ru/blog/post/making-gnome-applet-part-3-of-3/dialog-add-to-panel/" title="Dialog 'add to panel'"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/11/applet_addto.thumbnail.png" alt="Dialog 'add to panel'" /></a>
+
+<a rel="attachment" class="imagelink" href="http://www.pyobject.ru/blog/post/making-gnome-applet-part-3-of-3/dialog-add-to-panel/" title="Dialog 'add to panel'"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/11/applet_addto.thumbnail.png" alt="Dialog 'add to panel'" /></a>
+
+<a rel="attachment" class="imagelink" href="http://www.pyobject.ru/blog/post/making-gnome-applet-part-3-of-3/dialog-add-to-panel/" title="Dialog 'add to panel'"><img src="http://gorod-omsk.ru/blog/pythy/files/2006/11/applet_addto.thumbnail.png" alt="Dialog 'add to panel'" /></a>
+</p>
+<h2>Что дальше</h2>
+<p>Дальше встает вопрос о распространении апплета. Напомню, какие файлы нужны для работы апплета:
+</p>
+<ul>
+ <li>
+     <code>GNOME_ProxySwitcher.server</code> - описание нашего апплета для Bonobo, должен лежать либо в <code>/usr/lib/bonobo/servers</code>, либо в одном из каталогов, упомянутых в <code>/etc/bonobo-activation/bonobo-activation-config.xml</code> (по умолчанию всё закомментировано).
+ </li>
+
+ <li>
+     <code>applet_skeleton.py</code>, <code>applet_example.py</code>, <code>proxyswitcher.py</code> - собственно код апплета, исполняемый файл (<code>proxyswitcher.py</code>) должен лежать в месте, указанном в <code>GNOME_ProxySwitcher.server</code>; остальные - в <code>PYTHONPATH</code> (наиболее простой вариант - в том же месте, что и <code>proxyswitcher.py</code>)
+ </li>
+
+ <li>
+     файлы переводов <code>proxyswitcher.mo</code> в каталоге <code>/usr/share/locale</code>, либо указанном в <code>proxyswitcher.py</code>
+ </li>
+</ul>
+<p>Если апплет пакетировать в deb/rpm, то проблем не возникает - Bonobo-файл и файл переводов кладутся в нужные места, а код апплета, скажем, в <code>/usr/lib/gnome-applets/proxyswitcher</code>. Если не пакетировать, то ситуация такая: пользовательское ПО по <a href="http://www.opennet.ru/docs/RUS/file-sys/">стандарту FHS</a> должно помещаться либо в <code>/opt</code>, либо в <code>/usr/local</code>. В <code>/opt</code> обычно ставят ПО сторонних вендоров, так что правильное место для нашего апплета - это <code>/usr/local</code>. Так что нужно: написать шаблоны Bonobo-файла и <code>proxyswitcher.py</code> и в зависимости от переданного значения ключа <code>--prefix</code> при установке заполнять шаблоны необходимыми данными. 
+
+</p>
+<p>Еще один момент, который требует доработки - это обработка ошибок. Дело в том, что если при старте апплета возникает какая-либо ошибка, то GNOME об этом ничего не скажет, а молча не запустит апплет. Так что было бы здорово, если при возникновении исключительной ситуации, апплет сообщал о ней.
+</p>
+<p>Думаю, что решению этих вопросов будет посвящена еще одна статья. Код, описанный в статье, как всегда, можно получить на <a href="http://pythy.googlecode.com/svn/trunk/gnomeapplet_03/">code.google.com</a>
+</p>
+{% endmark %}

@@ -1,0 +1,38 @@
+{% meta %}
+    tags: [django, ajax, retellings]
+    title: Django и AJAX
+{% endmeta %}
+
+{% mark body %}
+<a href="http://www.b-list.org/weblog/">Джеймс Бенетт</a> <a href="http://www.b-list.org/weblog/2006/07/02/django-and-ajax">рассказывает</a> о поддержке AJAX в Django. А я пересказываю :)
+
+<!--more-->
+
+Тема <a href="http://djangoproject.com">Django</a>+<a href="http://ru.wikipedia.org/wiki/Ajax">AJAX</a> весьма "горяча". Django-разработчики говорят, что уже сейчас фреймворк готов для работы с AJAX. Джеймс Бенетт приводит пример нового модуля-сериализатора Django:
+
+<code>
+from django.core import serializers 
+def my_json_view(request):
+&nbsp;&nbsp;&nbsp;&nbsp;data = serializers.serialize(“json”, MyModel.objects.all()[:5])
+&nbsp;&nbsp;&nbsp;&nbsp;return HttpResponse(data, mime_type=”text/javascript”)
+</code>
+
+Данный пример возвращает пять последних объектов в формате <a href="http://www.json.org/">JSON</a>.
+
+Однако, в сравнении с <a href="http://rubyonrails.com">RoR</a> и <a href="http://www.turbogears.org">TurboGears</a>, поддержка AJAX в Django лишь на стороне сервера. Джеймс Бенетт предлагает создавать JavaScript "руками". На это он приводит несколько причин:
+<ul>
+	<li>не хочется привязывать Django к какому-либо JS-тулкиту</li>
+	<li>поддерживать все популярные JS-тулкиты в Django нет возможности</li>
+</ul>
+
+В итоге он говорит о том, что сейчас человек не может называться web-разработчиком, если он не знает JavaScript (помимо HTML и CSS).
+
+Напоследок Джеймс Бенетт формулирует краткие тезисы:
+<blockquote>
+<ul>
+	<li>Вы уже можете использовать AJAX в Django, и в действительности это совсем не сложно.</li>
+	<li>Возможно, в будущем (после улучшения механизмов сериализации) это будет проще чем сейчас, и бдет еще проще если/когда мы сделаем API web-сервисов.</li>
+	<li>Использование "помошников", чтобы не писать JavaScript, плохо и не правильно. Учите JavaScript. Пишите JavaScript. Это будет лучше для Ваc.</li>
+</ul>
+</blockquote>
+{% endmark %}

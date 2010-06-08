@@ -1,0 +1,256 @@
+{% meta %}
+    tags: [pyqt, docs]
+    title: PyQt4-плагины для Qt Designer
+{% endmeta %}
+
+{% mark body %}
+<p>В <a href="http://pyobject.ru/blog/2008/05/07/pyqt-unpythonic-gui/">прошлом посте про PyQt</a> 
+   я немного рассказал о возможных способах создания GUI и говорил о том, что
+   использование QtDesginer - неплохой вариант. Также я упоминал, что такой подход
+   таит в себе как преимущества, так и недостатки. Преимущества, которые я ощутил
+   на себе: разделение кода представления и кода логики; возможность быстро набросать 
+   прототип интерфейса. Недостатки, как это обычно бывает - продолжения достоинств:
+   переработка интерфейса в QtDesigner часто требует больше кропотливого труда, чем
+   в случае <strong>правильно организованного</strong> ручного кода; существует небольшой диссонанс
+   &quot;я знаю, как это сделать в коде, как же это делается в QtDesigner?&quot;.
+</p>
+<p>Сегодня я расскажу об одной приятной возможности QtDesigner - работе с кастомными
+   виджетами.
+</p>
+<!--more-->
+<h3>Шаг 1: простой виджет</h3>
+<p>В качестве рабочего примера будет QEditBox (обычное поле ввода), дополненный
+   возможностью мигать фоном, сигнализируя о чём-нибудь (у меня была ошибка ввода).
+</p>
+<p>Если бы мы делали без оглядки на QtDesigner, то вышло бы что-то похожее на это:
+</p>
+<pre><code>class QLineEditWErrState(QtGui.QLineEdit):
+
+    def __init__(self, parent=None):
+        QtGui.QLineEdit.__init__(self, parent)
+        self.timeout = 800
+        self.errorCss = 'background-color: antiquewhite'
+        self._orig_css = self.styleSheet()
+
+    def setErrorState(self):
+        self.emit(QtCore.SIGNAL(&quot;errorStateSet()&quot;))
+        self.setStyleSheet(self.error_css)
+        QtCore.QTimer.singleShot(self.timeout, self.resetErrorState)
+
+    def resetErrorState(self):
+        self.setStyleSheet(self._orig_css)
+        self.emit(QtCore.SIGNAL(&quot;errorStateReseted()&quot;))
+</code></pre><p>В традициях Python, вероятно, стоило описать конструктор как
+</p>
+<pre><code>    def __init__(self, timeout=800, errorCss='background-color: antiquewhite'):
+        QtGui.QLineEdit.__init__(self, parent)
+        self.timeout = timeout
+        self.errorCss = errorCss
+        self._orig_css = self.styleSheet()
+</code></pre><p>Но в 
+<a href="http://doc.trolltech.com/qq/qq13-apis.html">Qt4 принят такой API</a>,
+что конструктор принимает лишь один необязательный параметр - 
+   родительский объект/виджет, а все дополнительные параметры выставляются 
+   вызовом методов/изменением атрибутов. И стоит придерживаться именно такого API,
+   иначе ваш виджет может оказаться неинтероперабельным с нативными Qt-виджетами и/или
+   объектами.
+   
+</p>
+
+<h3>Описание виджета в плагине для QtDesigner</h3>
+<p>Пусть наш кастомный виджет будет в модуле <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4-designer-plugins/step_1/widget.py">widget.py</a>. Сделаем так,
+   чтобы <code>QLineEditWErrState</code> можно было добавлять через QtDesigner.
+   Для этого нужно сделать описание виджета, например в модуле <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4-designer-plugins/step_1/plugins/widget_plugin.py">widget_plugin.py</a>:
+</p>
+<pre><code>class QLineEditWErrStatePlugin(QtDesigner.QPyDesignerCustomWidgetPlugin):
+    &quot;&quot;&quot;
+    QLineEditWErrStatePlugin(QtDesigner.QPyDesignerCustomWidgetPlugin)
+
+    Provides a Python custom plugin for Qt Designer by implementing the
+    QDesignerCustomWidgetPlugin via a PyQt-specific custom plugin class.
+    &quot;&quot;&quot;
+
+    def __init__(self, parent=None):
+        QtDesigner.QPyDesignerCustomWidgetPlugin.__init__(self, parent)
+        self.initialized = True
+
+    def createWidget(self, parent):
+        # метод должен вернуть экземпляр класса нашего виджета
+        # вот тут и пригодилось согласование с принятым в Qt4 API
+        return QLineEditWErrState(parent)
+
+    def name(self):
+        # этод метод должен вернуть имя класса виджета
+        return &quot;QLineEditWErrState&quot;
+
+    def group(self):
+        # имя группы виджета
+        return &quot;PyQt custom widgets&quot;
+
+    def icon(self):
+        # иконка виджета
+        return QtGui.QIcon()
+
+    def toolTip(self):
+        # всплывающая подсказка
+
+
+
+
+        return &quot;QLineEdit with error state&quot;
+
+    def whatsThis(self):
+        # краткое описание
+        return &quot;Custom widget QLineEditWErrState - QLineEdit with error state&quot;
+
+    def isContainer(self):
+        # True, если виджет может служить контейнером других виджетов,
+        # при этом требуется реализация QDesignerContainerExtension
+        # False в противном случае
+        return False
+
+    def domXml(self):
+        # должен вернуть XML-описание виджета и параметры его свойств.
+        # минимально -- класс и имя экземпляра класса
+        # вставляется в .ui
+        return '&lt;widget class=&quot;QLineEditWErrState&quot; name=\&quot;errStateLineEdit\&quot; /&gt;\n'
+
+    def includeFile(self):
+        # возвращает имя модуля, в котором хранится наш виджет
+        # вставляется как `import &lt;includeFile&gt;` в генеренном из .ui Python-коде
+        return &quot;widget&quot;
+</code></pre><p>После этого нужно сообщить QtDesigner, чтобы он &quot;подхватил&quot; это описание. Можно положить в условное место, но если стоит системный Qt4, то это не удобно. Я использую переменную <code>PYQTDESIGNERPATH</code>, в которой указываю путь, где искать плагины. Точнее я просто пишу <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4-designer-plugins/step_1/_run_designer.sh">небольшой shell-скрипт</a>, в котором задаю необходимые переменные. Видимо, желающим попробовать это под Windows, придется написать .bat по аналогии ;-)
+</p>
+<p>Результат выглядит примерно так:
+</p>
+<a href="/static/img/uploaded/qt4_designer_commented.png"><img src="/static/img/uploaded/thumb_qt4_designer_commented.png" width="200" height="141" /></a>
+<p>Теперь мы можем в какую-нибудь форму добавить наш измененный виджет.
+</p>
+
+<h3>Пример приложения</h3>
+<p>Для экспериментов мы будем использовать небольшое бесполезное приложение. 
+</p>
+<a href="/static/img/uploaded/qt4_qapp.png"><img src="/static/img/uploaded/thumb_qt4_qapp.png" width="200" height="79" /></a>
+<p>Есть два поля ввода - обычное <code>QLineEdit</code>, доступное для редактирования, 
+   и наше кастомное <code>QLineEditWErrState</code>, не доступное для редактирования. При изменении текста в <code>QLineEdit</code>, 
+   такой же текст должен появляться в <code>QLineEditWErrState</code> и при вводе каждого символа должен моргать фон нашего
+   кастомного виджета. Если перефразировать это в терминах сигналов и слотов, то мы соединим 
+   стандартный сигнал <code>QLineEdit</code> - <code>textEdited(QString)</code> с двумя слотами: один стандартный для <code>QLineEdit</code> - <code>setText(QString)</code> (появление текста во втором поле ввода) и второй - определенный только для <code>QLineEditWErrState</code> - <code>setErrorState()</code> (моргание фоном).
+</p>
+<p>Создадим <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4-designer-plugins/step_1/demo.ui">.ui</a> и посмотрим: в него добавилась секция описания нашего виджета:
+</p>
+<pre><code>&lt;customwidgets&gt;
+  &lt;customwidget&gt;
+    &lt;class&gt;QLineEditWErrState&lt;/class&gt;
+    &lt;extends&gt;QLineEdit&lt;/extends&gt;
+    &lt;header&gt;widget&lt;/header&gt;
+  &lt;/customwidget&gt;
+&lt;/customwidgets&gt;
+</code></pre><p>после генерации из .ui <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4-designer-plugins/step_1/demo_ui.py">py-файла</a>, получаем дополнительный импорт
+</p>
+<pre><code>from widget import QLineEditWErrState
+</code></pre><p>Так что никакой магии - всё указывается явно:
+</p>
+<ul>
+ <li>
+     модуль, откуда импортировать (он же тег <code>header</code> в .ui) берется из <code>plugin.includeFile()</code>
+ </li>
+
+ <li>
+     имя класса, который импортировать (он же тег <code>class</code> в .ui) берется из <code>plugin.name()</code> и <code>plugin.domXml()</code>
+ </li>
+
+ <li>
+     имя переменной, которой присваивать экземпляр класса - из <code>plugin.domXml()</code>
+ </li>
+</ul>
+<p>Теперь если мы желаем достичь описанного поведения, нам нужно написать приложение, которое бы до запуска
+   соединяло нужные сигналы со слотами. Код не очень интересный, я не буду приводить его, а желающие могут
+   посмотреть <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4-designer-plugins/step_1/qapp.py">рабочий пример в hg-репо</a>
+</p>
+<p>Сразу можно отметить небольшое неудобство: для стандартных виджетов мы можем определить связи &quot;сигнал-слот&quot; в дизайнере. С нашим кастомным виджетом такое не получается - дизайнер не знает о том, какие слоты и сигналы доступны. Получается, либо мы стандартные связи описываем в дизайнере, а кастомные - в коде, либо все сигналы описываем в коде. И то и другое не очень здорово (особенно первое).
+</p>
+<p>И второй момент, который можно отметить: управление поведением таким образом реализованного виджета возможно только из кода. Т.е. если в приложении нужно будет в одном виджете нужно моргать зеленым цветом, а в другом - красным, то такое поведение можно задать только в коде.
+И дальше мы посмотрим, как виджет можно улучшить.
+</p>
+
+<h3>Шаг 2: улучшенный виджет</h3>
+<p>PyQt4 даёт способ разрешить обе недоработки: при помощи нехитрых конструкций можно сообщить дизайнеру о доступных свойствах, а также описать слоты и сигналы.
+</p>
+<p>Слоты - по факту просто методы, дизайнеру нужно лишь сообщить сигнатуру. Делается это при помощи декоратора <code>pyqtSignature</code>:
+</p>
+<pre><code>@QtCore.pyqtSignature(&quot;setErrorState()&quot;)
+def setErrorState(self):
+    ...
+</code></pre><p>Доступные сигналы указываются при помощи атрибута класса <code>__pyqtSignals__</code>:
+</p>
+<pre><code>class QLineEditWErrState(QtGui.QLineEdit):
+
+    __pyqtSignals__ = (&quot;errorStateSet()&quot;, &quot;errorStateReseted()&quot;)
+</code></pre><p>А свойства задаются функцией <code>pyqtProperty(&lt;тип&gt;, &lt;геттер&gt;, [сеттер], [сброс])</code>:
+</p>
+<pre><code>errorCss = QtCore.pyqtProperty(&quot;QString&quot;, getErrorCss, setErrorCss, resetErrorCss)
+</code></pre><p>Помимо того что <code>errorCss</code> становится Qt-свойством, оно также ведет себя как и Python-свойство. 
+</p>
+<p>По-видимому, этого достаточно, чтобы исправить недостатки &quot;первого шага&quot;. Наш виджет после улучшений принимает
+   примерно <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4-designer-plugins/step_2/widget.py">такой вид</a>:
+</p>
+<pre><code>class QLineEditWErrState(QtGui.QLineEdit):
+
+    __pyqtSignals__ = (&quot;errorStateSet()&quot;, &quot;errorStateReseted()&quot;)
+
+    def __init__(self, *args):
+        QtGui.QLineEdit.__init__(self, *args)
+        self.resetTimeout()
+        self.resetErrorCss()
+        self._orig_css = self.styleSheet()
+
+    @QtCore.pyqtSignature(&quot;setErrorState()&quot;)
+    def setErrorState(self):
+        self.emit(QtCore.SIGNAL(&quot;errorStateSet()&quot;))
+        self.setStyleSheet(self.error_css)
+        QtCore.QTimer.singleShot(self.timeout, self.resetErrorState)
+
+    @QtCore.pyqtSignature(&quot;resetErrorState()&quot;)
+    def resetErrorState(self):
+        self.setStyleSheet(self._orig_css)
+        self.emit(QtCore.SIGNAL(&quot;errorStateReseted()&quot;))
+
+    def getErrorCss(self):
+        return self.error_css
+
+    def setErrorCss(self, value):
+        self.error_css = value
+
+    def resetErrorCss(self):
+        self.error_css = 'background-color: antiquewhite'
+
+    errorCss = QtCore.pyqtProperty(&quot;QString&quot;, getErrorCss, setErrorCss, resetErrorCss)
+
+    def getTimeout(self):
+        return self.timeout
+
+    def setTimeout(self, value):
+        self.timeout = value
+
+    def resetTimeout(self):
+        self.timeout = 800
+
+    stateTimeout = QtCore.pyqtProperty(&quot;int&quot;, getTimeout, setTimeout, resetTimeout)
+</code></pre><p>Если теперь запустим дизайнер, <em>не изменяя описание виджета</em>, то увидим, что достигли желаемого. 
+</p>
+<a href="/static/img/uploaded/qt4_designer_properties.png"><img src="/static/img/uploaded/thumb_qt4_designer_properties.png" width="200" height="141" /></a>
+<p>Теперь мы можем соединить все нужные слоты и сигналы в дизайнере. 
+</p>
+<p><a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4-designer-plugins/step_2/qapp.py">Код приложения</a> становится тривиальным. Более того, теперь даже генеренный из .ui <a href="http://hg.pyobject.ru/sandbox/file/tip/pyqt4-designer-plugins/step_2/demo_ui.py">py-модуль</a> обладает нужным функционалом.
+</p>
+<p>Это, кстати, достаточно интересно, поскольку позволяет задать уже в дизайнере некое поведение формы и посмотреть/протестировать его отдельно. Как мне кажется, это может быть весьма полезным при прототипировании интерфейса и его тестировании.
+</p>
+<a href="/static/img/uploaded/qt4_designer_signals.png"><img src="/static/img/uploaded/thumb_qt4_designer_signals.png" width="200" height="140" /></a>
+<p>Ссылки по теме:
+<ul>
+    <li><a href="http://www.riverbankcomputing.co.uk/static/Docs/PyQt4/pyqt4ref.html#writing-qt-designer-plugins">Writing Qt Designer Plugins</a></li>
+    <li><a href="http://www.diotavelli.net/PyQtWiki/Using_Python_Custom_Widgets_in_Qt_Designer">Using Python Custom Widgets in Qt Designer</a></li>
+</ul>
+</p>
+{% endmark %}

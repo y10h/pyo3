@@ -1,0 +1,49 @@
+{% meta %}
+    tags: [oodb, tools, storage, reviews]
+    title: Хранение объектов
+{% endmeta %}
+
+{% mark body %}
+<p>По работе надо делать экспорт данных в <a href="http://www.clicketyclick.dk/databases/xbase/format/index.html">dbf</a>. Зачастую спецификации к формату экспорта выглядит примерно так: описание собственно формата экспортируемого файла плюс некое количество справочников. 
+</p>
+
+
+<!--more-->
+
+<blockquote><p>Под справочниками в данном контексте понимается таблица с двумя (редко больше) полями, первое поле - код (обычно называемое <code>code</code> или <code>id</code>, хотя некоторые умудряются называть его <code>kod</code>), второе - значение (<code>val</code>, <code>value</code>, <code>name</code>).
+</p>
+</blockquote><p>В <a href="http://ru.wikipedia.org/wiki/%D0%A0%D0%B5%D0%BB%D1%8F%D1%86%D0%B8%D0%BE%D0%BD%D0%BD%D0%B0%D1%8F_%D0%BC%D0%BE%D0%B4%D0%B5%D0%BB%D1%8C_%D0%B4%D0%B0%D0%BD%D0%BD%D1%8B%D1%85">реляционных</a> терминах это обыкновенная связь один-ко-многим. Однако нюанс заключается в том, что у меня в БД &quot;кодировка&quot; этих справочников иная. Плюс название справочных значений зачастую отличается. Благо, справочников исчислимое количество, так что вполне можно поручить человеку сделать перекодировку справочников, сразу же сопоставив справочные значения. Со временем количество перекодировочных значений растет, так что я решил все экспортные вещи выделить в отдельный модуль и не держать в основной БД. Встал вопрос о формате хранения справочников и перекодировок. Всякие <a href="http://en.wikipedia.org/wiki/Relational_Database_Management_System">РСУБД</a> (в том числе и такие легкие как <a href="http://sqlite.org/">SQLite</a>) не подходят: у них слишком большие накладные расходы. И дело не в скорости доступа, а в простоте кода. Требуется либо создавать дополнительный слой абстракции, чтобы не писать каждый раз идентичные SQL-запросы, либо использовать уже готовый <a href="http://phd.pp.ru/Russian/Software/orm.html">ORM</a> (<a href="http://www.sqlobject.org/">SQLObject</a> или <a href="http://www.sqlalchemy.org/">SQLAlchemy</a>). Если же отказаться от мысли &quot;SQL везде и всюду&quot;, то видны некоторые более подходящие варианты:
+</p>
+<ul>
+ <li>
+     <a href="http://docs.python.org/lib/module-anydbm.html">Berkley DB</a>. Хранит пары ключ-значение. И ключ и значение должны быть строками. Т.е. Python-объекты дополнительно нужно перед сохранением <a href="http://ru.wikipedia.org/wiki/%D0%A1%D0%B5%D1%80%D0%B8%D0%B0%D0%BB%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F">сериализировать</a> (при помощи <a href="http://docs.python.org/lib/module-pickle.html">pickle</a>). Можно и не утруждать себя - создатели Python уже позаботились об этом в модуле <a href="http://docs.python.org/lib/module-shelve.html">shelve</a>. Однако в <a href="http://itconnection.ru/pipermail/zopyrus/">ZoPyRus</a> я <a href="http://itconnection.ru/pipermail/zopyrus/2004-June/073580.html">не</a> <a href="http://itconnection.ru/pipermail/zopyrus/2004-June/073842.html">раз</a> <a href="http://itconnection.ru/pipermail/zopyrus/2005-December/081538.html">слышал</a> от <a href="http://maryniuk.net/">Bogdan Maryniuk</a> о том, что Berkley DB - ненадежное хранилище.
+ </li>
+ <li>
+     <a href="http://twistedmatrix.com/trac/browser/trunk/twisted/persisted/dirdbm.py">twisted.persisted.dirdbm</a>. Предоставляет dbm-like интерфейс, но хранилище - файловая система. Каждый ключ хранится как отдельный файл. Помимо этого, <code>dirdbm</code> не является thread-safe. Этот модуль не зависит от других частей Twisted, так что при желании его можно использовать отдельно. Имеет функционал, аналогичный <code>shelve</code>, позволяющий в качестве значений хранить не только строки, но и более сложные Python-объекты (естественно, не без <a href="http://docs.python.org/lib/node66.html">ограничений</a>).
+ </li>
+ <li>
+     <a href="http://www.zope.org/Wikis/ZODB/">ZODB</a>. Zope Object DB, объекто-ориентированная база данных, часть <a href="http://www.zope.org/">Zope</a>. Хранилище-backend может быть <a href="http://cvs.zope.org/ZODB3/Doc/storages.html?rev=1">произвольным</a> (есть даже DemoStorage). По умолчанию - FileStorage, хранящий информацию в отдельном файле. Чем меня сразу привлек ZODB - так это <a href="http://www.zope.org/Products/ZEO/ZEOFactSheet">ZEO</a> (Zope Enterprise Objects). За &quot;магическим&quot; и ничего не говорящим словом enterprise стоит возможность доступа по сети к ZODB &quot;из коробки&quot;. Ну и слово Zope не должно вводить в заблуждение - ZODB (в комплекте с ZEO) доступен как раздельный компонент, без установки всего Zope.
+ </li>
+</ul>
+<p>Так что мой выбор пал на ZODB. Для того, чтобы установить ZODB из исходников, нужен Python (не ниже 2.3, рекомендуется 2.4) и C-компилятор. Для Windows доступны бинарные (скомпилированные) модули. Правда, с бинарным модулем для Python-2.3 на Windows у меня возникла проблема:
+</p>
+<pre><code>Python 2.3.5 (#62, Feb  8 2005, 16:23:02) [MSC v.1200 32 bit (Intel)] on win32
+Type &quot;help&quot;, &quot;copyright&quot;, &quot;credits&quot; or &quot;license&quot; for more information.
+&gt;&gt;&gt; from ZODB import FileStorage
+Traceback (most recent call last):
+  File &quot;&lt;stdin&gt;&quot;, line 1, in ?
+  File &quot;C:\Python\Lib\site-packages\ZODB\FileStorage\__init__.py&quot;, line 3, in ?
+    from ZODB.FileStorage.FileStorage \
+  File &quot;C:\Python\Lib\site-packages\ZODB\FileStorage\FileStorage.py&quot;, line 36, in ?
+    from ZODB.lock_file import LockFile
+  File &quot;C:\Python\Lib\site-packages\ZODB\lock_file.py&quot;, line 39, in ?
+    _flags = fcntl.LOCK_EX | fcntl.LOCK_NB
+AttributeError: 'module' object has no attribute 'LOCK_EX'
+
+</code></pre><p>С Python-2.4 такого не возникло, так что я обновил на рабочей машине Python до    2.4.3 (тем более, давно собирался, да все никак повода не было). На Linux, ни с Python-2.3, ни с Python-2.4 проблем не было.
+</p>
+<p>В Google нашел пару статей по ZODB, но ими лучше не пользоваться - они устарели, так что лучшей документацией будет та, что <a href="http://www.zope.org/Wikis/ZODB/FrontPage/guide/index.html">идет в комплекте</a> с ZODB.
+</p>
+<p>На днях расскажу, как я реализовал эти самые справочники при помощи ZODB.
+</p>
+{% endmark %}

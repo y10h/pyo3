@@ -1,0 +1,165 @@
+{% meta %}
+    tags: [pygtk, gnome, docs]
+    title: Создание апплета GNOME: часть вторая (из трех)
+{% endmeta %}
+
+{% mark body %}
+<p>Продолжу рассказ о создании апплета к панели GNOME. В <a href="http://www.pyobject.ru/blog/post/making-gnome-applet-part-1-of-3/">прошлый раз</a> я написал &quot;костяк&quot; апплета, который ничего не делает. Сегодня на его основе напишу апплет, который уже чем-то будет полезен.
+</p>
+
+<!--more-->
+
+
+<h2>GConf</h2>
+<p>Напомню, что конечная цель - создание апплета для переключения прокси (вкл/выкл). Для этих целей есть диалог &quot;Параметры прокси-серверов&quot; (Система-&gt;Параметры-&gt;Сервис Прокси), но им не удобно пользоваться, поскольку нужно совершать много лишних действий.
+
+</p>
+<p>Сам диалог настройки ничего не делает, он лишь изменяет значение соответствующего параметра в <a href="http://en.wikipedia.org/wiki/GConf">GConf</a> (<code>/system/proxy/mode</code>), а программы, использующие прокси, следят за значением этого параметра. Поэтому, для того чтобы включить или выключить прокси, апплету достаточно изменить нужное значение в GConf.
+</p>
+<blockquote>
+<p>У GConf есть как положительные, так и отрицательные стороны. Из положительных хочу отметить такие приятные вещи как:
+    <ul>     
+     <li> информирование всех &quot;подписанных&quot; на параметр программ об изменении его значения (внешне это выглядит так: открываете диалог &quot;Параметры прокси-серверов&quot;, меняете при помощи Python значение нужного параметра и переключатель в диалоге сам &quot;прыгает&quot; на нужную позицию)</li>
+
+     <li> глобальность изменения: не нужно думать о том, что нужно еще проставить значение переменной <code>http_proxy</code> для <code>wget</code> - GConf делает это автоматически. Ну а то, что все GNOME-программы берут настройки о использовании/не использовании прокси из GConf, я думаю, понятно без объяснений.</li>
+    </ul>
+</p>
+<p>Из отрицательных я выделяю:
+    <ul>
+     <li> gconfd &quot;гадит&quot; в журналы. Мне не нравится, что gconfd пишет в общесистемный журнал (<code>/var/log/messages</code>) на русском языке.</li>
+
+     <li> несогласованность настроек различных программ. Например, <a href="http://www.gajim.org/">Gajim</a> и <a href="http://www.mozilla.com/firefox/">Firefox</a> используют собственные настройки соединений. И если для Gajim можно найти оправдание (поддержка нескольких аккаунтов), то для Firefox я не вижу причин игнорировать GConf. Хотя для Gajim адекватен был бы выбор между &quot;использовать глобальные настройки Gnome&quot; и &quot;использовать отдельные настройки для соединений&quot;.</li>
+     <li> невозможность (или просто я не знаю о таком) изменить настройки только для отдельных приложений</li>
+
+    </ul>
+</p>
+</blockquote>
+<p>Прежде чем писать код, советую &quot;поиграться&quot; в интерактивной сессии (в качестве индикатора о смене настроек можно использовать диалог &quot;Параметры прокси-сервера&quot;, либо редактор `gconf-editor`, но на мой взгляд, диалог прокси более показателен)
+</p>
+<pre><code>&gt;&gt;&gt; import gconf
+&gt;&gt;&gt; gc = gconf.client_get_default()
+&gt;&gt;&gt; gc.get_string('/system/proxy/mode')
+'none'
+
+&gt;&gt;&gt; gc.set_string('/system/proxy/mode', 'manual')
+True
+&gt;&gt;&gt; gc.get_string()
+'manual'
+</code></pre><p>Что происходит, если попытаться получить значение несуществующего ключа, или извлечь значение не того типа, предлагаю изучить самостоятельно, вооружившись <code>gconf-editor</code> и Python.
+</p>
+<p>Что касается возможных значений ключа '/system/proxy/mode', то допустимые значения здесь таковы: <code>none</code>, <code>manual</code>, <code>auto</code>. Если значение не входит в список разрешенных, оно интерпретируется как <code>none</code>. 
+
+</p>
+<p>Последняя оговорка и можно приступать к написанию кода: для того, чтобы GConf сообщал об изменении того или иного ключа, нужно &quot;подгрузить&quot; одну из веток GConf для &quot;прослушки&quot; и добавить callback-функцию на изменение нужного ключа.
+</p>
+<p>В коде изложено всё вышесказанное:
+</p>
+<pre><code>class ProxyGconfClient(object):
+    &quot;&quot;&quot;Get/set proxy states&quot;&quot;&quot;
+    proxy_dir = &quot;/system/proxy&quot;
+
+    proxy_key = &quot;/system/proxy/mode&quot;
+    on_state = 'manual'
+    off_state = 'none'
+
+    def __init__(self, callback=None):
+        &quot;&quot;&quot;
+        GConf client for getting/setting proxy states
+
+        @param callback: callback function. Executing
+            when proxy state changed. It calls with params:
+              * client - GConf client
+              * cnxn_id - connection ID
+              * entry - changed entry
+              * params - additional params
+        @type callback: callable
+        &quot;&quot;&quot;
+        if callback is None:
+            callback = lambda client, cnxn_id, entry, params: None
+        # make connection to GConfD
+        self.client = gconf.client_get_default()
+        # add proxy_dir for inspection, without preload
+        self.client.add_dir(self.proxy_dir,
+                            gconf.CLIENT_PRELOAD_NONE)
+        # add callback for notifying about changes
+        self.client.notify_add(self.proxy_key,
+                               callback)
+
+    def get_state(self):
+        &quot;&quot;&quot;Returns state of proxy&quot;&quot;&quot;
+        return self.client.get_string(self.proxy_key)
+
+    def set_state(self, value):
+        &quot;&quot;&quot;
+
+        Set state of proxy
+
+        @param value: state of proxy, may be
+          * 'none' - direct connection, proxy off
+          * 'manual' - manual settings, proxy on
+          * 'auto' - auto settings, proxy on 
+          if value neither 'manual', no 'auto', it means
+          direct connection, i.e. proxy off.
+        @raise RuntimeError: cannot set value to GConf's key
+        &quot;&quot;&quot;
+        if not self.client.set_string(self.proxy_key,
+                                      value):
+            raise RuntimeError(&quot;Unable to change key %s&quot; % \
+                               self.proxy_key)
+
+    def on(self):
+        &quot;&quot;&quot;Turn proxy on (i.e. set proxy mode 'manual')&quot;&quot;&quot;
+        self.set_state(self.on_state)
+
+    def is_on(self):
+        &quot;&quot;&quot;Is proxy on? (i.e. proxy in 'manual' mode)&quot;&quot;&quot;
+        return self.get_state() == self.on_state
+
+    def off(self):
+        &quot;&quot;&quot;Turn proxy off (i.e. set direct connection)&quot;&quot;&quot;
+
+        self.set_state(self.off_state)
+</code></pre>
+<h2>Заполнение скелета</h2>
+<p>Собственно для реализации работающего апплета почти всё готово: скелет апплета, объект-переключатель -
+</p>
+<pre><code>class ProxyGnomeApplet(GnomeAppletSkeleton):
+
+    def after_init(self):
+        self.proxy = ProxyGconfClient(callback=self._cb_proxy_change)
+	self.proxy_state = self.proxy.get_state()
+        self.button_actions[1] = self.switch_proxy
+        self.label.set_text(self.proxy_state)
+
+    def _cb_proxy_change(self, client, cnxn_id, entry, params):
+        &quot;&quot;&quot;Callback for changing proxy&quot;&quot;&quot;
+        self.proxy_state = self.proxy.get_state()
+        self.label.set_text(self.proxy_state)
+
+    def on_enter(self, widget, event):
+        info = &quot;Proxy mode: %s&quot; % self.proxy_state
+        self.tooltips.set_tip(self.ev_box, info)
+
+    def switch_proxy(self):
+        if self.proxy.is_on():
+            self.proxy.off()
+        else:
+            self.proxy.on()
+</code></pre><p>Поясняю написанное:
+</p>
+
+<p>Во-первых, напоминаю, что <code>after_init</code> специально создавался в скелете для переопределения в потомках, так что это правильное место для добавления прокси-переключателя (атрибут <code>proxy</code>), определения действия на левую кнопку мыши (<code>button_actions[1]</code>) и установки начального текста для <code>label</code>.
+</p>
+<p>Во-вторых, в качестве callback-функции, которая выполняется при смене состояния ключа GConf, я использую <code>_cb_proxy_change</code> (сигнатура этой функции такова: GConf-клиент, идентификатор соединения, измененный ключ, дополнительные параметры). По идее, идеологически более правильно здесь использовать конструкцию <code>entry.get_value().get_string()</code>, но мне не нравится такой стиль записи, он не Pythonic. Поэтому я использую информацию от объекта прокси-переключателя.
+
+</p>
+<p>Далее, переопределенная callback-функция <code>on_enter</code>, теперь она показывает состояние прокси, а не просто &quot;Привет мир&quot;.
+</p>
+<p>Ну и последний метод - <code>switch_proxy</code> - выполняется по нажатию левой кнопки, переключает состояние прокси.
+</p>
+<p>Действия по регистрации этого, уже работающего, апплета абсолютно аналогичны таковым для скелета, так что я не описываю их. Рабочий код можете взять <a href="http://pythy.googlecode.com/svn/trunk/gnomeapplet_02/">отсюда</a>.
+</p>
+<p>Фактически, апплет уже функционирует, однако выглядит он не притязательно. В следующей части буду &quot;шлифовать&quot; внешний вид.
+
+</p>
+{% endmark %}

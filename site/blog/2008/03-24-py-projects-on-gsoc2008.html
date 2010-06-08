@@ -1,0 +1,333 @@
+{% meta %}
+    tags: [google, events, python, wxpython, mercurial, zope, django, moinmoin, turbogears]
+    title: Py-проекты в Google Summer of Code 2008
+{% endmeta %}
+
+{% mark body %}
+<p>Сегодня начался набор студентов для <a href="http://code.google.com/soc/2008/">Google Summer of Code 2008</a>. Я решил написать небольшой обзор Python-проектов, подавших идеи для GSoC. Все они хорошо известны (Django, Plone, Zope, MoinMoin, Mercurial, wxPython) и служат &quot;визиткой&quot; Python, так что особо расписывать про них не буду, кратко пробегусь по идеям.
+</p>
+
+<!--more-->
+<h3>Django</h3>
+<p>Сайт: <a href="http://www.djangoproject.com/">http://www.djangoproject.com/</a> <br/>
+   Идеи: <a href="http://code.djangoproject.com/wiki/SummerOfCode2008">http://code.djangoproject.com/wiki/SummerOfCode2008</a>
+</p>
+<ul>
+ <li>
+     Поддержка новых СУБД: MS SQL, Firebird, IBM DB2 и т.д.
+ </li>
+
+ <li>
+     Поддержка агрегатных функций в ORM
+ </li>
+
+ <li>
+     Улучшение встроенного веб-сервера для отдачи статических данных
+ </li>
+
+ <li>
+     Улучшение шаблонов: пространства имен, 
+ </li>
+
+ <li>
+     Доработка поддержки нескольких БД (multi-db branch)
+ </li>
+
+ <li>
+     Комплексные поля и/или составные ключи
+ </li>
+</ul>
+
+<h3>Mercurial</h3>
+<p>Сайт: <a href="http://www.selenic.com/mercurial">http://www.selenic.com/mercurial</a> <br/>
+   Идеи: <a href="http://www.selenic.com/mercurial/wiki/index.cgi/SummerOfCode">http://www.selenic.com/mercurial/wiki/index.cgi/SummerOfCode</a>
+</p>
+<ul>
+ <li>
+     Создания аналога inotify-плагина для Windows и MacOS X.
+ </li>
+
+ <li>
+     Улучшение поддержки именованных бранчей
+ </li>
+
+ <li>
+     Частичное клонирование (выборка поддерева репозитория, выборка части ревизий)
+ </li>
+
+ <li>
+     Легкое копирование/переименование
+ </li>
+
+ <li>
+     Доработка MQ (Mercurial Queues) 
+ </li>
+
+ <li>
+     Подключение внешнего репозитория как поддерева (аналог svn:externals)
+ </li>
+
+ <li>
+     Доработка TortoiseHg - GUI-оболочки для hg
+ </li>
+
+ <li>
+     Доработка инструментов конвертации репозиториев других VCS
+ </li>
+</ul>
+
+<h3>MoinMoin</h3>
+<p>Сайт: <a href="http://moinmo.in/">http://moinmo.in/</a> <br/>
+   Идеи: <a href="http://moinmo.in/GoogleSoc2008/InitialProjectIdeas">http://moinmo.in/GoogleSoc2008/InitialProjectIdeas</a>
+</p>
+<ul>
+ <li>
+     Доработка подсистемы хранения данных (ACL, аттач файлов, скрипты миграций, документация, SQL-бэкенд) и поиска (поиск по wiki-farms, юниттесты, исправление багов, работа под Windows)
+ </li>
+
+ <li>
+     Использование LDAP и других внешних источников для групп в MoinMoin
+ </li>
+
+ <li>
+     Редизайн пользовательского интерфейса (в том числе и web-инсталлятор/админка)
+ </li>
+
+ <li>
+     Доработка RSS-фидов, реализация Atom
+ </li>
+</ul>
+
+<h3>Plone</h3>
+<p>Сайт: <a href="http://plone.org">http://plone.org</a> <br/>
+   Идеи: <a href="http://www.openplans.org/projects/plone-summer-of-code-2008/project-ideas">http://www.openplans.org/projects/plone-summer-of-code-2008/project-ideas</a>
+</p>
+<p>Если честно, то &quot;ниасилил&quot;. Идеи достаточно специфичны, а я в Plone - ноль без палочки, так что очень поверхностно:
+</p>
+<ul>
+ <li>
+     Поддержка AJAX-форм для PloneFormGen
+ </li>
+
+ <li>
+     Упрощение развертывания при помощи buildout
+ </li>
+
+ <li>
+     Поддержка WSGI-аутентификаци
+ </li>
+
+ <li>
+     Улучшение поиска по китайскому, корейскому, японскому языкам
+ </li>
+
+ <li>
+     Доработка трансформаций текста (подсветка синтаксиса, поддержка TeX)
+ </li>
+</ul>
+<p>Кое-какие идеи уже &quot;в разработке&quot;:
+</p>
+<ul>
+ <li>
+     Базовая функциональность социальных сетей
+ </li>
+
+ <li>
+     Микроформаты на входе/выходе
+ </li>
+
+ <li>
+     Поддержка atompub
+ </li>
+</ul>
+
+<h3>Python/core</h3>
+<p>Сайт: <a href="http://python.org">http://python.org</a> <br/>
+   Идеи: <a href="http://wiki.python.org/moin/CodingProjectIdeas/PythonCore">http://wiki.python.org/moin/CodingProjectIdeas/PythonCore</a>
+</p>
+<ul>
+ <li>
+     Аудит кода, по возможности используя автоматический анализ на сколько это возможно.
+ </li>
+
+ <li>
+     Подчистка ifdef'ов в кроссплатформенном код, включая модули <code>os</code> и <code>posix</code>
+ </li>
+
+ <li>
+     Оптимизация производительности: уменьшение потребления памяти, увеличение скорости запуска интерпретатора, оптимизация математических алгоритмов, оптимизация сборщика мусора, увеличение скорости доступа к встроенному пространству имен
+ </li>
+
+ <li>
+     Профайлер использования памяти, отладчик счетчика ссылок, сборщика мусора и др.
+ </li>
+
+ <li>
+     Виртуальная машина: использование регистровой виртуальной машины вместо стековой.
+ </li>
+
+ <li>
+     Добавление тестов на покрытие кода в систему сборки, улучшение интроспекции C-модулей
+ </li>
+
+ <li>
+     Анализ AST-компилятора: обход AST, анализ, модификация, перекомпилирование модифицированного дерева в байткод и др.
+ </li>
+
+ <li>
+     Статистический профайлер для включения в ядро Python, профайлер с поддержкой потоков
+ </li>
+
+ <li>
+     Новый базовый тип массивов высокой размерности - <code>basearray</code> или <code>dimarray</code>, по аналогии с массивами NumPy
+ </li>
+
+ <li>
+     Улучшение производительности в многопоточных операциях, возможно избавление от GIL.
+ </li>
+
+ <li>
+     Улучшение поддержки различных компиляторов C.
+ </li>
+
+ <li>
+     Управление пользователем степенью оптимизации, отказ от <code>.pyo</code>.
+ </li>
+
+ <li>
+     Пробная реализация импорта на &quot;чистом&quot; Python
+ </li>
+</ul>
+
+<h3>TurboGears</h3>
+<p>Сайт: <a href="http://turbogears.org/">http://turbogears.org/</a> <br/>
+   Идеи: <a href="http://docs.turbogears.org/GSoC/Ideas2008">http://docs.turbogears.org/GSoC/Ideas2008</a>
+</p>
+<ul>
+ <li>
+     Создание CMS, основанной на TurboGears
+ </li>
+
+ <li>
+     Запуск TurboGears на Jython (основная проблема с Genshi)
+ </li>
+
+ <li>
+     Доработка инструментов для ToscaWidgets, популяризация ToscaWidgets
+ </li>
+
+ <li>
+     Создание платформы для автоматических тестов (билдботы, автоматические тесты установки, развертывания, и т.д.)
+ </li>
+
+ <li>
+     Создание автоматической системы документирования (создание туториалов и документации по api из исходных текстов фреймворка и проектов-примеров).
+ </li>
+
+ <li>
+     Оптимизация Genshi
+ </li>
+
+ <li>
+     Использование Routes для диспетчеризации URLов
+ </li>
+
+ <li>
+     Использование Elixir в моделях, доработка Elixir
+ </li>
+</ul>
+
+<h3>wxPython</h3>
+<p>Сайт: <a href="http://wxpython.org">http://wxpython.org</a> <br/>
+   Идеи: <a href="http://wiki.wxpython.org/Google%20SoC%20Project%20Ideas">http://wiki.wxpython.org/Google%20SoC%20Project%20Ideas</a>
+</p>
+<ul>
+ <li>
+     Переход на новую схему сборки (bakefile вместо distutils)
+ </li>
+
+ <li>
+     Сборка wxPython как Python Egg
+ </li>
+
+ <li>
+     Подчистка примеров из вики
+ </li>
+
+ <li>
+     Интеграция wxBitmap и PIL
+ </li>
+
+ <li>
+     Интеграция wxPython и numpy
+ </li>
+
+ <li>
+     Переработка GUI2Exe, кроссплатформенного аналога py2exe
+ </li>
+
+ <li>
+     Доработка демонстрационного приложения
+ </li>
+
+ <li>
+     Доработка документации: создание скринкастов, туториалов
+ </li>
+</ul>
+
+<h3>Zope</h3>
+<p>Сайт: <a href="http://zope.org">http://zope.org</a> <br/>
+   Идеи: <a href="http://wiki.zope.org/gsoc/SummerOfCode2008">http://wiki.zope.org/gsoc/SummerOfCode2008</a>
+</p>
+<ul>
+ <li>
+     Поддержка Python 2.5 в Zope2
+ </li>
+
+ <li>
+     Доработка интроспекции в Grok
+ </li>
+
+ <li>
+     Интеграция Grok с реляционными БД (используя ORM, как например, SQLAclhemy или Storm), возможность развертывания Grok ZODB+реляционная БД либо только на реляционной БД.
+ </li>
+
+ <li>
+     Доработка скинов в Grok (упрощение, доработка модели безопасности)
+ </li>
+
+ <li>
+     Доработка управления пользователями и группами в Grok
+ </li>
+
+ <li>
+     Создание архитектуры и реализации интеграции компонент Zope и плагинов setuptools
+ </li>
+
+ <li>
+     Правильная обработка &quot;поломанных&quot; объектов (т.е. описание классов для которых не существует) в ZODB.
+ </li>
+
+ <li>
+     Улучшение репликации ZODB через ZEO
+ </li>
+
+ <li>
+     Поддержка MS SQL для RelStorage бэкенда ZODB (бэкенд для хранения данных в РСУБД)
+ </li>
+
+ <li>
+     Возможность ограничения размера blob-кеша в ClientStorage (клиент ZODB/ZEO)
+ </li>
+
+ <li>
+     Альтернативная стратегия кеширования в ZODB
+ </li>
+
+ <li>
+     OCQL: язык запросов (и не только) для ZODB
+ </li>
+</ul>
+<p>В обзор не попали мелкие Py-проекты, не появившиеся на странице Summer of Code, но представленные как <a href="http://wiki.python.org/moin/SummerOfCode">идеи к Python</a>.
+</p>
+{% endmark %}

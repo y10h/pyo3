@@ -1,0 +1,43 @@
+{% meta %}
+    tags: [mine, packages, tools]
+    title: getRelativeTime() на русском
+{% endmeta %}
+
+{% mark body %}
+Эхия Чеботар написал <a href="http://jehiah.com/archive/printing-relative-dates-in-python">getRelativeTime()</a>, функцию для отображения относительной даты текстом, а я адаптировал эту функцию к русскому языку.
+
+<!--more-->
+
+Чтобы не заморачиваться с кодировками, результат возвращается в unicode. 
+<code>
+&gt;&gt;&gt; from russianRelativeDates import *
+&gt;&gt;&gt; import time
+&gt;&gt;&gt; def a(x, *args, **kwargs):
+...     print getRelativeTime(x, *args, **kwargs).encode('utf-8')
+... 
+&gt;&gt;&gt; def b(x, *args, **kwargs):
+...     print getRelativeTimeStr(x, *args, **kwargs).encode('utf-8')
+... 
+&gt;&gt;&gt; x = time.time() - 1000 
+&gt;&gt;&gt; a(x)
+17 минут назад
+&gt;&gt;&gt; x -= 12345
+&gt;&gt;&gt; a(x)
+3 часа назад
+&gt;&gt;&gt; x += 543211
+&gt;&gt;&gt; a(x)
+через 6 дней
+&gt;&gt;&gt; a(x, accuracy=2)
+через 6 дней 3 часа
+&gt;&gt;&gt; b("07/20/06 1823")
+через 3 дня
+&gt;&gt;&gt; b("07/10/06 1823")
+6 дней назад
+&gt;&gt;&gt; b("07/10/06 1823", accuracy=2)
+6 дней 4 часа назад
+&gt;&gt;&gt; b("07/15/06 1823")
+вчера
+</code>
+
+Код библиотечки хотел привести здесь, да WordPress почему-то "корежит" его, так что брать опять с <a href="http://rapidshare.de/files/26007272/russianRelativeDates.py.html">RapidShare.de</a>.
+{% endmark %}

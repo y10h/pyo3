@@ -1,0 +1,266 @@
+{% meta %}
+    tags: [versions, python]
+    title: Наконец то вышел Python 2.5
+{% endmeta %}
+
+{% mark body %}
+<p>Наконец дождались <a href="http://mail.python.org/pipermail/python-dev/2006-September/068851.html">релиза</a> новой ветки Python - 2.5. Скачать новую версию можно с <a href="http://www.python.org/download/releases/2.5/">официального сайта</a>. Что появилось нового в этой ветке по сравнению с 2.4 можно прочитать в  <a href="http://www.python.org/dev/peps/pep-0356/">PEP 356</a> и в <a href="http://docs.python.org/dev/whatsnew/whatsnew25.html">документации</a>.
+</p>
+
+<p>Ниже я кратко рассмотрел основные возможности, добавленные в Python 2.5.
+</p>
+
+<!--more-->
+
+<h3>PEP 308: условные выражения</h3>
+<p>Появился тернарный оператор, теперь код
+</p>
+<pre><code>if condition:
+    x = true_value
+else:
+    x = false_value
+</code></pre><p>можно записать так:
+</p>
+<pre><code>x = true_value if condition else false_value
+</code></pre><p>См. <a href="http://www.python.org/peps/pep-0308.html">PEP 308</a> для подробностей.
+</p>
+
+<h3>PEP 309: Частично вычислимые функции</h3>
+<p>Появился модуль <code>functools</code>, в котором собраны инструменты для программирования в функциональном стиле. Например, функция <code>partial()</code>, позволяет создавать частично вычислимые функции. Т.е. можно создать функцию, на основе существующей, у которой часть аргументов уже определена.
+</p>
+<pre><code>import functools
+
+def log(message, subsystem):
+    print &quot;%s: %s&quot; % (subsystem, message)
+
+server_log = functools.partial(log, subsystem='server')
+server_log(&quot;Unable to open socket&quot;)
+</code></pre><p>Подробности см. в <a href="http://www.python.org/peps/pep-0309.html">PEP 309</a>.
+
+</p>
+
+<h3>PEP 314: Метаданные для пакетов ПО, версия 1.1</h3>
+<p>В <code>distutils</code> добавлены зависимости. Теперь в функции <code>setup()</code> есть параметры <code>requires</code>, <code>provides</code> и <code>obsoletes</code>.
+
+</p>
+<pre><code>VERSION = '1.1'
+setup(name='MyPyPackages',
+      version=VERSION,
+  requires=['numarray', 'zlib (&gt;=1.1.4)'],
+  obsoletes=['OldPackages'],
+  download_url=('http://example.com/mypypackage/dist/pkg-%s.tar.gz'
+                 % VERSION),
+)
+</code></pre><p>Помимо этого, добавлена команда <code>upload</code>, которая автоматически загружает пакет на <a href="http://cheeseshop.python.org/">CheeseShop Python Package index</a>.
+</p>
+<p>Подробности по использованию см. в <a href="http://www.python.org/peps/pep-0314.html">PEP 314</a>.
+</p>
+
+<h3>PEP 328: Абсолютный и относительный импорт</h3>
+<p>Ранее, если имелся пакет <code>pkg</code>:
+</p>
+<pre><code>pkg/
+pkg/__init__.py
+pkg/main.py
+pkg/string.py
+</code></pre><p>то <code>import string</code> из модуля <code>main</code> импортировал <code>pkg.string</code>, а не стандартный модуль. В будущих версиях (где-то в районе Python 2.7) <code>import string</code> будет <strong>всегда</strong> импортировать стандартный модуль. Такого поведения (т.е. абсолютный импорт) можно и добиться в Python 2.5, выполнив директиву:
+</p>
+<pre><code>from __future__ import absoulte_import
+</code></pre><p>Так что теперь нужно либо явно импортировать <code>string</code> из пакета <code>pkg</code>:
+</p>
+<pre><code>from pkg import string
+</code></pre><p>Либо воспользоваться относительным импортом:
+</p>
+<pre><code>from . import string
+</code></pre><p>Варианты использования таковы:
+</p>
+<pre><code># код внутри модуля A.B.C
+from . import D # импортирует A.B.D
+from .. import E    # импортирует A.E
+from ..F import G   # импортирует A.F.G
+</code></pre><p>Поправка: имена, начинающиеся с точки можно использовать только в конструкции <code>from ... import</code>.
+</p>
+<p>Более полную информацию об абсолютном и относительном импорте см. в <a href="http://www.python.org/peps/pep-0328.html">PEP 328</a>.
+</p>
+
+<h3>PEP 341: Унифицированный try/except/finally</h3>
+<p>До Python 2.5 <code>try</code> использовался в двух вариантах: либо с <code>finally</code>, либо с <code>except</code>. Теперь можно использовать <code>except</code> и <code>finally</code> одновременно.
+
+</p>
+<pre><code>try:
+    block-1 ...
+except Exception1:
+    handler-1 ...
+except Exception2:
+    handler-2
+else:
+    else-block
+finally:
+    final-block
+</code></pre><p>Выполняется код <em>block-1</em>. Если во время выполнения возбуждается исключение, то в зависимости от класса исключения (<code>Exception1</code> либо <code>Exception2</code>) выполняется либо <em>handler-1</em>, либо <em>handler2</em>. Если исключение не возбуждается, то выполняется <em>else-block</em>. И вне зависимости от того, было ли возбуждено исключение и какого типа, выполняется <em>final-block</em>. Даже если в обработчиках были ошибки, или при выполнении <em>else-block</em> было возбуждено исключение, всё равно <em>final-block</em> будет выполнен.
+</p>
+<p>Подробности см. в <a href="http://www.python.org/peps/pep-0341.html">PEP 341</a>.
+</p>
+
+<h3>PEP 342: Новые возможности генераторов</h3>
+<p>Python 2.5 предоставляет простой способ для передачи значений <em>в</em> генератор. Введенные в Python 2.3, генераторы лишь производят вывод значений, код генератора единожды вызывается для создания итератора и нет способа добавить новую информацию в функцию, вызов которой продолжен. Некоторые используют хаки в виде глобальных переменных или изменяемых объектов, которые изменяются во время выполнения. В Python 2.5 этого не нужно.
+</p>
+<p>Немного освежим память о генераторах. Например, простой генератор:
+</p>
+<pre><code>def counter(maximum):
+    i = 0
+    while i &lt; maximum:
+        yield i
+        i += 1
+</code></pre><p>При вызове <code>counter(10)</code> получаем итератор, возвращающий значения от 0 до 9. Когда итератор наталкивается на <code>yield</code>, он возвращает переданное значение и &quot;замораживает&quot; выполнение функции, сохраняя при этом локальные переменные. Итератор &quot;просыпается&quot; при вызове метода <code>next()</code> и продолжает выполнение функции сразу после <code>yield</code>.
+</p>
+<p>В Python 2.3 <code>yield</code> была инструкцией (statement), в Python 2.5 она стала выражением (expression). Так что теперь она возвращает значение, которое может быть присвоено переменной или другим образом обработано:
+</p>
+<pre><code>val = (yield i)
+</code></pre><p>Ниже приведен переписанный на Python 2.5 пример:
+</p>
+<pre><code>def counter(maximum):
+    i = 0
+    while i &lt; maximum:
+        val = (yield i)
+        # если это значение, меняем счетчик
+        if val is not None:
+            i = val
+        else:
+            i += 1
+</code></pre><p>И вот так можно передавать значения:
+</p>
+<pre><code>&gt;&gt;&gt; it = counter(10)
+&gt;&gt;&gt; print it.next()
+0
+&gt;&gt;&gt; print it.next()
+1
+&gt;&gt;&gt; print it.send(8)
+8
+&gt;&gt;&gt; print it.next()
+9
+&gt;&gt;&gt; print it.next()
+Traceback (most recent call last):
+  File ``t.py'', line 15, in ?
+    print it.next()
+StopIteration
+</code></pre><p>Зачем нужно проверять на <code>None</code>, какие новые методы помимо <code>send()</code> появились у генераторов можно узнать из <a href="http://www.python.org/peps/pep-0342.html">PEP 342</a>
+</p>
+
+<h3>PEP 343: Инструкция 'with'</h3>
+<p>Инструкция <code>with</code> делает код более прозрачным в тех случаях, когда использовали <code>try...finally</code> для гарантии выполнения &quot;очищающего&quot; (clean-up) кода.
+</p>
+<p>Для того, чтобы включить эту инструкцию в Python 2.5 необходимо выполнить директиву:
+</p>
+<pre><code>from __future__ import with_statement
+</code></pre><p>Начиная с Python 2.6, инструкция <code>with</code> будет доступна и без этой директивы.
+</p>
+<p>Общая структура кода с инструкцией <code>with</code> выглядит так:
+</p>
+<pre><code>with expression [as variables]:
+    with-block
+</code></pre><p>И пример использования:
+</p>
+<pre><code>with open('/etc/passwd', 'r') as f:
+    for line in f:
+    print line
+    ... что-то еще ...
+</code></pre><p>После завершения блока, объект <code>f</code> автоматически будет закрыт, даже если в цикле <code>for</code> было возбуждено исключение.
+
+</p>
+<p>Другой пример, с блокировками (пакет <code>threading</code>):
+</p>
+<pre><code>lock = threading.Lock()
+with lock:
+    # критический код
+...
+</code></pre><p>Блокировка захватывается до выполнения блока, и в любом случае отпускается после его завершения (удачного или неудачного).
+</p>
+<p>Более подробно об использовании <code>with</code> рассказано <a href="http://docs.python.org/dev/whatsnew/pep-343.html">в соответствующем разделе документации</a> и в <a href="http://www.python.org/peps/pep-0343.html">PEP 343</a>.
+</p>
+
+<h3>PEP 352: Исключения - классы нового типа</h3>
+<p>Во-первых сами исключения стали классами нового типа (new-style class). А во-вторых, изменилась иерархия. Теперь она выглядит примерно так:
+</p>
+<pre><code>BaseException       # новый, появился Python 2.5
+|- KeyboardInterrupt
+|- SystemExit
+|- Exception
+   |- (все остальные исключения)
+</code></pre><p>В-третьих, использование строк как исключений (т.е. код <code>raise &quot;Error occurred&quot;</code>) будет выдавать предупреждение.
+</p>
+<p>Подробнее об этом см. в <a href="http://www.python.org/peps/pep-0352.html">PEP 352</a>.
+</p>
+
+<h3>Другие изменения в языке</h3>
+<p>Изменения, внесенные в язык:
+</p>
+<ul>
+ <li><p>В объектах типа <code>dict</code> появился новый магический метод <code>__missing__(key)</code>, вызываемый в случае, если ключ <code>key</code> не найден в словаре.
+</p>
+ </li>
+ <li><p>К строкам добавлены методы <code>partition(sep)</code> и <code>rpartition(sep)</code> для разбивки строки разделителем
+</p>
+ </li>
+ <li><p>Методы <code>startswith()</code> и <code>endswith()</code> строк теперь в качестве аргумента могут принимать кортеж строк, а не только одну строку.
+</p>
+ </li>
+ <li><p>Функциям <code>min()</code> и <code>max()</code> теперь можно передавать параметр <code>key</code> (смысл этого параметра аналогичен таковому у <code>sort()</code>)
+</p>
+ </li>
+ <li><p>Новые встроенные функции <code>any()</code> и <code>all()</code> определяют, содержит ли итератор True и False значения,. <code>any()</code> имеет смысл <code>OR</code>, а <code>all()</code>  имеет смысл <code>AND</code>.
+</p>
+ </li>
+ <li><p>ACII теперь кодировка по умолчанию для модулей. Так что если не указана кодировка и модуль содержит 8-и битные символы, то Python будет интерпретировать это как ошибку синтаксиса. В Python 2.4 это было лишь предупреждением. Поэтому внимательно читайте <a href="http://www.python.org/peps/pep-0263.html">PEP 263</a>
+</p>
+ </li>
+ <li><p>Добавлено новое предупреждение, <code>UnicodeWarning</code>, возникает в случае сравнения unicode-строки и обычной, 8-и битной. При этом результат сравнения - False. До этого возбуждалось исключение <code>UnicodeDecodeError</code>.
+</p>
+ </li>
+ <li><p>Часто Python-программисты забывают добавлять файл <code>__init__.py</code> в каталог, чтобы Python считал это каталог пакетом. Ранее нельзя было импортировать каталог без <code>__init__.py</code>. Сейчас можно. При этом может быть показано предупреждение (по умолчанию оно выключено) <code>ImportWarning</code>.
+</p>
+ </li>
+ <li><p>Можно опускать базовый класс в описании класса. Т.е. такой код вполне нормален:
+</p>
+<pre><code>class C():
+       pass
+</code></pre>
+ </li>
+</ul>
+
+<h3>Новые модули</h3>
+<p>В Python 2.5 в стандартную поставку добавились модули:
+</p>
+<ul>
+ <li>
+     <code>contextlib</code> - вспомогательные функции, используемые с инструкцией <code>with</code>
+ </li>
+ <li>
+     <code>cProfile</code> - C-реализация модуля <code>profile</code>
+ </li>
+ <li>
+     <code>msilib</code> - модуль для создания файлов Microsoft installer .msi и CAB.
+ </li>
+ <li>
+     <code>spwd</code> - модуль для доступа к БД теневых паролей (shadow password), на тех платформах, которые их поддерживают.
+ </li>
+ <li>
+     <code>uuid</code> - модуль для создания универсальных уникальных идентификаторов (UUID) по <a href="http://www.faqs.org/rfcs/rfc4122.html">RFC 4122</a>.
+ </li>
+ <li>
+     <code>ctypes</code> - <a href="http://starship.python.net/crew/theller/ctypes/">известный модуль Томаса Хеллера</a> для доступа к бинарным библиотекам (.so, .dll) теперь <a href="http://docs.python.org/dev/lib/module-ctypes.html">в составе стандартной библиотеки</a>
+ </li>
+ <li>
+     <code>ElementTree</code> - <a href="http://effbot.org/zone/element-index.htm">модуль Фредрика Лундха</a> для обработки XML включен в стандартную поставку под именем <code>xml.etree</code>.
+ </li>
+ <li>
+     <code>hashlib</code> - новый модуль Грегори Смита, пришел на замену <code>md5</code> и <code>sha</code>. Реализует различные хеши (SHA-224, SHA-256, SHA-512).
+ </li>
+ <li>
+     <code>sqlite3</code> - давно ожидаемый <a href="http://www.pysqlite.org/">pysqlite</a> вошел в <a href="http://docs.python.org/dev/lib/module-sqlite3.html">стандартную библиотеку</a>.
+ </li>
+ <li>
+     <code>wsgiref</code> - модуль, реализующий простой HTTP-сервер с поддержкой <a href="http://www.wsgi.org/">WSGI</a> (см. <a href="http://www.python.org/peps/pep-0333.html">PEP 333</a>)
+ </li>
+</ul>
+{% endmark %}

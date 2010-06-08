@@ -1,0 +1,184 @@
+{% meta %}
+    tags: [deploy, twisted, docs]
+    title: Развертывание Twisted-приложения
+{% endmeta %}
+
+{% mark body %}
+<p>Вот twisted-приложение написано, отлажено и готово к сдаче заказчику. Как же правильно развертывать twisted-приложение? Об этом я расскажу сегодня.
+</p>
+
+<!--more-->
+
+<p>
+У разработчика twisted-приложение можно запускать отдельным runner-ом. Например, как это сделано в <a href="http://www.pyobject.ru/blog/post/from-perl-script-to-twisted-app-intro/">TwistedPythy</a>: через <code>twisted.internet.reactor</code>. Для разработчика это удобно: запустил скрипт - сервер работает, логи видно тут же. Однако такой подход не приемлем в &quot;боевой&quot; обстановке: чтобы изменить параметры сервиса (в случае TwistedPythy, допустим, тип клиента, время задержки или номер порта) нужно править исходник. Далее, запуск/останов сервера должен быть неинтерактивным, ну и крайне желательно, чтобы он был стандартным для ОС (например, в случае Linux - через init-скрипт). Twisted предлагает несколько схем развертывания приложений.
+</p>
+
+<h2>Пару слов о сервисе</h2>
+
+<p>Небольшое отступление. В примере с TwistedPythy пока и слова не было о собственно &quot;приложении&quot;. Формально, это лишь тестовый запуск определенной фабрики (factory). Чтобы говорить о приложении, необходимо понять, что же это такое. <a href="http://twistedmatrix.com/projects/core/documentation/howto/application.html">Приложение</a> - это некий контейнер сервисов (под <a href="http://twistedmatrix.com/documents/current/api/twisted.application.service.IService.html">сервисом</a> понимается то, что требует отдельного запуска и останова). Приложение может содержать несколько сервисов, сервисы можно объединять в <a href="http://twistedmatrix.com/documents/current/api/twisted.application.service.IServiceCollection.html">коллекции</a>. Пример с TwistedPythy:
+</p>
+<pre><code>from twisted.application import internet, service
+from TwistedPythy import proto, clients
+
+config = {
+'listen-port' : 3000,   # порт, который нужно слушать
+'delay': 5,             # задержка перед ответом, в сек.
+'encoding': 'utf-8',    # кодировка транспорта
+}
+
+# -- всё как раньше, определяем клиента и тип фабрики
+client = clients.UnicodeDummyClient()
+client.pause_time = config['delay']
+factory = proto.AsyncUnicodePythyFactory(client, config['encoding'])
+
+# создаем приложение
+application = service.Application(&quot;TwistedPythy&quot;)
+# создаем один (в приложении м.б. несколько сервисов) сервис
+tp_service = internet.TCPServer(config['listen-port'], factory)
+# добавляем сервис в приложение
+tp_service.setServiceParent(application)
+</code></pre>
+<p>Однако теперь если просто запустить такой файл как Python-скрипт, ничего не произойдет. А так и должно быть. Приложение управляется только опосредованно. Через <code>twistd</code>. Так что теперь приложение запускается (для достижения аналогичного результата как в случае с простым runner-ом) следующим образом:
+
+</p>
+<pre><code>twistd -n -y twistedpythy_app.py
+</code></pre>
+
+<h2>TAC</h2>
+<p>TAC, он же Twisted Application Configuration. Формально - это тот же самый Python-модуль с описанием twisted-приложения, что и в вышеприведенном примере. Однако, код, создающий сервис лучше выделить из TAC в отдельный модуль. Назовем его <code>tap</code>, почему именно так - скажу позже. А в TAC лишь опции и &quot;пристыковка&quot; сервиса к приложению. Пример TAC:
+</p>
+<pre><code>from twisted.application import service
+from TwistedPythy import tap
+
+config = {
+    'listen-port': 3000,
+    'delay': 5,
+    'encoding': 'utf-8',
+}
+
+app = service.Application(&quot;TwistedPythy&quot;)
+s = tap.makeService(config)
+s.setSeriveParent(application)
+</code></pre>
+
+<p>Запуск TAC-файла также производится при помощи <code>twistd</code>. Вот такой способ запуска уже более подходит для разворачивания приложений (например, можно написать init-скрипт для апуска/останова). Однако мне он не нравится тем, что код и опции всё же смешиваются, TAC ничем не отличается от обыкновенного Py-модуля в этом плане. Для этого случая есть TAP.
+</p>
+
+<h2>TAP</h2>
+<p>TAP (я называю &quot;тапки&quot;), он же Twisted Application Pickled. Существуют вариации TAS (Twisted Application Source) и TAX (Twisted Application XML). Здесь смысл такой: создаем плагин к <code>mktap</code>, при его помощи создаем приложение <em>с конкретными опциями</em>. И при помощи <code>twistd</code> запускаем это приложение. Теперь по шагам:
+
+</p>
+
+<h3>Делаем плагин</h3>
+<p>И вот тут <a href="http://twistedmatrix.com/projects/core/documentation/howto/tutorial/configuration.html">пример finger</a> из HOWTO - <strong>неправильный</strong>. А правильный документ - <a href="http://twistedmatrix.com/projects/core/documentation/howto/plugin.html">The Twisted Plugin System</a>. Т.е. использование <code>plugins.tml</code> - устаревший и не рекомендуемый способ. Нужно использовать <code>twisted.plugin</code>. И здесь придется немного поразбираться.
+
+</p>
+<p>Чтобы <code>twisted</code> &quot;словил&quot; плагин, нужно три условия:
+</p>
+<ul>
+ <li>
+     Плагин должен реализовать <a href="http://twistedmatrix.com/documents/current/api/twisted.plugin.IPlugin.html">IPlugin</a>
+ </li>
+
+ <li>
+     Плагин должен реализовать интерфейс-требование данного приложения, в случае с <code>mktap</code> - это <a href="http://twistedmatrix.com/documents/current/api/twisted.scripts.mktap.IServiceMaker.html">IServiceMaker</a>
+ </li>
+
+ <li>
+     Он должен лежать в определенном месте. По умолчанию - это подкаталог <code>twisted/plugins</code> <strong>любого каталога из PYTHONPATH</strong>
+
+ </li>
+</ul>
+<p>Насчет последнего требования - это значит недостаточно сделать в каталоге со своим проектом каталог <code>twisted/plugins</code>. Нужно либо создать это в <strong>текущем каталоге</strong> (из которого будет запускаться <code>mktap</code>), либо в любом другом из PYTHONPATH.
+</p>
+<p>А для первых двух требований есть &quot;помощник&quot;: <a href="http://twistedmatrix.com/documents/current/api/twisted.scripts.mktap._tapHelper.html">_tapHelper</a>, который упрощает регистрацию плагина к <code>mktap</code>. Именно из-за этого &quot;помощника&quot; и нужно, чтобы модуль, в котором описано создание сервиса назывался <code>tap</code>.
+
+</p>
+<blockquote><p>Небольшое лирическое отступление. Про <code>twisted.python.usage.Options</code>. Это модуль для помощи в разборе опций и аргументов, переданных приложению через командную строку. Так вот, если выполнять определенные соглашения, то таким образом можно контролировать опции, которые будут переданы приложению через <code>mktap</code>. Соглашение очень простое - класс опций должен называться Options. Подробнее об использовании <code>twisted.python.usage</code> см. <a href="http://twistedmatrix.com/documents/current/api/twisted.python.usage.html">в docstring-ах</a> к этому модулю
+</p></blockquote>
+<p>Итак, модуль-плагин к <code>mktap</code> выглядит так:</p>
+
+<pre><code>from twisted.application import internet, service
+from twisted.python import usage
+from TwistedPythy import proto, clients
+
+class Options(usage.Options):
+    optParameters = (
+    ('listen-port', 'l', 3000, 'Port listening to'),
+    ('encoding', 'e', 'utf-8', 'Transport encoding'),
+    ('delay', 'd', 5, 'Delay in client before answer')
+
+def makeService(config):
+    app = service.Application('TwistedPythy')
+    client = clients.UnicodeDummyClient()
+    client.pause_time = config['delay']
+    factory = proto.AsyncUnicodePythyFactory(client, config['encoding'])
+    return internet.TCPServer(config['port'], factory)
+</code></pre>
+<p>Теперь создаем регистратор плагина, т.е. каталог <code>twisted/plugins</code>, в который кладем такой файл:
+</p>
+<pre><code>from twisted.scripts.mktap import _tapHelper
+TwistedPythy = _tapHelper(
+    &quot;Twited Pythy Demo server&quot;,            # название сервиса
+    &quot;TwistedPythy.tap&quot;,                    # модуль, который и реализует собственно плагин
+    &quot;An Twisted Pythy example service&quot;,    # описание
+    &quot;tpythy&quot;                               # имя &quot;тапки&quot;, которая в итоге будет получена
+)
+
+</code></pre><p>Чтобы проверить, что все сделали правильно, запускаем <code>mktap</code>:
+</p>
+<pre><code>pythy@axcel:~/blog/twisted/twistedpythy_05$ mktap tpythy --help
+Usage:    mktap [options] &lt;command&gt; [command options] tpythy [options]
+Options:
+  -p, --port=                Port listening to [default: 3000]
+  -e, --encoding=            Transport encoding [default: utf-8]
+  -d, --delay=               Delay in client before answer [default: 5]
+      --version
+      --help                 Display this help and exit
+</code></pre>
+<p>Если появляется сообщение, что команда <code>tpythy</code> (т.е. имя &quot;тапки&quot;) не найдена, это значит <code>mktap</code> &quot;не подхватил&quot; плагин.
+
+</p>
+
+<h3>Делаем и запускаем &quot;тапки&quot;</h3>
+<p>Если же всё нормально, то можно приступать к формированию &quot;тапки&quot;. <code>mktap</code> понимает два набора опция: опции самого <code>mktap</code> и опции того приложения, чья &quot;тапка&quot; делается, в данном случае, TwistedPythy. Опции <code>mktap</code> передаются <em>до</em> имени &quot;тапки&quot;, а опции TwistedPythy - <em>после</em>. Например так:
+
+</p>
+<pre><code>pythy@axcel:~/blog/twisted/twistedpythy_05$ mktap --uid=1000 --gid=1000 tpythy --delay=20 --listen-port=5000
+</code></pre><p>В этом случае будет сформирована &quot;тапка&quot; формата по умолчанию (т.е. pickled) с именем tpythy.tap и опциями: uid/gid запущенного приложения будет 1000 (если root будет делать запуск/останов), задержка внутри клиента будет 20 секунд, приложение будет слушать 5000 порт. Всё. Эти опции &quot;зашиты&quot; в &quot;тапку&quot;. Чтобы их изменить, нужно заново создавать &quot;тапку&quot; с измененными опциями.
+</p>
+<blockquote><p>Т.е. &quot;тапка&quot; должна создаваться при конфигурировании приложения. Однако скрипт <code>tap2deb</code> заворачивает в пакет только данную конкретную &quot;тапку&quot;, что идеологически не верно. Я уж надумал писать правильный инструмент для заворачивания twisted-приложений в deb-пакет, да вовремя спросил разработчиков (на IRC-канале #twisted) о рекомендуемом способе развертывания twisted-приложений. И то, что они сказали внушает оптимизм...
+
+</p></blockquote>
+<p>Запускается &quot;тапка&quot; при помощи того же <code>twistd</code>, но с опцией <code>-f</code> вместо <code>-y</code>.
+</p>
+
+<h2>Twisted-2.5: жизнь без &quot;тапок&quot;</h2>
+
+<p>А сказали мне разработчики то, что в грядущем Twisted-2.5 идеологически верным способом является создание плагинов к <code>mktap</code>, но без промежуточного шага в виде &quot;тапки&quot;. Т.е. если раньше было
+</p>
+<pre><code>mktap tpythy --encoding=utf-8; twistd -f tpythy.tap
+</code></pre><p>То теперь так:
+</p>
+<pre><code>twistd tpythy --encoding=utf-8
+</code></pre><p>И что гораздо лучше, это есть уже сейчас, в svn с ревизии <a href="http://twistedmatrix.com/trac/changeset/17992">17992</a>
+</p>
+
+<h2>Итог</h2>
+
+<ul>
+ <li>
+     TAC - не очень красивый, но очень гибкий способ, работает в twisted-2.x
+ </li>
+
+ <li>
+     TAP - более строгий, но противоречивый (с одной стороны более &quot;правильный&quot; чем TAC, с другой - более &quot;кривой&quot;), работает в twisted-2.x
+ </li>
+
+ <li>
+     TAPless на плагинах к <code>mktap</code> - строгий и самый &quot;прямой&quot; способ, но работает только в twisted-svn-r17992+
+ </li>
+</ul>
+<p>Код, как всегда - на <a href="http://pythy.googlecode.com/svn/trunk/twistedpythy_05/">code.google.com</a>
+</p>
+{% endmark %}

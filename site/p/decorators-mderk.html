@@ -1,0 +1,232 @@
+{% meta %}
+    title: Декораторы функций и методов в Python
+{% endmeta %}
+
+{% block content %}
+<div id="content">
+<blockquote>Это статья в оригинале была опубликована в блоге Максима Деркачева (ragbag.ru), но некоторое время блог Максима не поддерживается и единственный источник -- это <a href="http://web.archive.org/web/20070502063044/www.ragbag.ru/2006/11/07/python_decorators/">архив</a>. Чтобы статья не пропала, я размещаю здесь ее копию.</blockquote>
+
+
+<p>Начиная с версии 2.4 в Python введена новая синтаксическая конструкция &mdash; декоратор функции/метода. С ее помощью можно "декорировать" функции &mdash; дополнять их новой функциональностью без внесения изменений в сами функции и методы. Слово "декоратор" часто используется в связи с <a href="http://en.wikipedia.org/wiki/Decorator_pattern" target="_blank">паттеном Декоратор</a>, описанным в <a href="http://www.books.ru/shop/books/352130?partner=mderk" target="_blank">знаменитой книге "Банды четырех"</a>. Это не совсем тот случай, имейте в виду, хотя некоторое сходство имеется. В этой статье я опишу механизм декораторов и рассмотрю примеры его применения.<br /> 
+<a id="more-12"></a><br /> 
+Прежде всего, стоит отметить, что функции в Python &mdash; это <a href="http://en.wikipedia.org/wiki/First-class_object" target="_blank">first-class objects</a>. Что это означает, можно почитать на странице по ссылке или в другой литературе (<a href="http://www.thescripts.com/forum/thread25126.html" target="_blank">неплохая дискуссия по поводу этого термина</a>). На русский язык это переводится с трудом, т.к. слово "первоклассный" у нас имеет несколько другой оттенок, хотя и передает частично то значение, которое подразумевается в данном случае. На практике это означает, что такой объект не имеет ограничений по использованию &mdash; он может иметь атрибуты, может быть присвоен переменной, передан в функцию в качестве аргумента, может быть значением возврата из функции и т.п. В отличие от PHP, где передача функции осуществляется при помощи синтаксических хаков с разыменованием переменных, в Python передается непосредственно ссылка на объект-функцию.</p> 
+<p>При этом, объект функции подчиняется тем же правилам, которым подчиняется любой другой объект в Python &mdash; в частности, на него заводится счетчик ссылок, и сам объект не зависит от того первоначального имени, которое было ему дано при определении функции (этому имени может быть впоследствие присвоен другой объект, но объект функции будет доступен по другим ссылкам, если они есть).</p> 
+<p>Ну и, конечно, функция может быть создана в процессе исполнения другой функции. Все эти особенности и используются для декорирования функций.</p> 
+<h2>Декорирование функций</h2> 
+<p>Функция может быть передана в качестве аргумента в другую функцию, а имени, которое указывает на функцию, можно присвоить другой объект. Это открывает нам широкие возможности писать код в стиле <a href="http://en.wikipedia.org/wiki/Functional_programming" target="_blank">функционального программирования</a>. Мы можем сделать следующее:</p> 
+<div class="syntax_hilite"> 
+<div id="python-1"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">def</span> foo<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">print</span> arg</p> 
+<p><span style="color: #ff7700;font-weight:bold;">def</span> decorated<span style="color: black;">&#40;</span>fun<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> <span style="color: #ff7700;font-weight:bold;">not</span> <span style="color: #008000;">hasattr</span><span style="color: black;">&#40;</span>fun, <span style="color: #483d8b;">'__call__'</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">raise</span> <span style="color: #008000;">TypeError</span> <span style="color: black;">&#40;</span><span style="color: #483d8b;">'The argument should be a callable'</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> wrapper<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">print</span> <span style="color: #483d8b;">"calling function %s with arg %s"</span> % <span style="color: black;">&#40;</span>fun.__name__, <span style="color: #008000;">str</span><span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> fun<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> wrapper</p> 
+<p>foo = decorated<span style="color: black;">&#40;</span>foo<span style="color: black;">&#41;</span></p> 
+<p>foo<span style="color: black;">&#40;</span><span style="color: #ff4500;">1</span><span style="color: black;">&#41;</span></div> 
+</div> 
+</div> 
+<p>     </p> 
+<p>Результат запуска примера будет выглядеть так:</p> 
+<pre> 
+calling function foo with arg 1
+1
+</pre> 
+<p>Функция <code>foo</code> просто выводит переданный ей аргумент. Функция <code>decorated</code> (позже станет понятно откуда название) принимает в качестве аргумента функцию (точнее, объект, который может быть вызван на исполнение). Если будет передан какой-нибудь неподходящий объект, будет вызвана исключительная ситуация <code>TypeError</code>. Внутри функции <code>decorated</code> объявляется функция <code>wrapper</code>, которая "оборачивает" вызов переданной в <code>decorated</code> функции, предваряя ее вызов выводом имени вызываемой функции и ее аргумента. Функция <code>wrapper</code> &mdash; фактически шаблон для создания новой функции, которая возникнет только в процессе исполнения <code>decorated</code>.</p> 
+<p>Эта новая функция &mdash; и есть результат вызова <code>decorated</code>, и мы присваиваем его имени <code>foo</code>. После этого <code>foo</code> ссылается не на оригинальную функцию <code>foo</code>, а на эту новую функцию, которая была создана из определения <code>wrapper</code> в процессе исполнения <code>decorated(foo)</code>. На саму оригинальную <code>foo</code> осталась ссылка только внутри этой созданной функции.</p> 
+<p>Здесь также использован такой механизм языка, как вложенные области видимости (<a href="http://www.python.org/dev/peps/pep-0227/" target="_blank">nested scopes</a>) &mdash; если переменная доступна в локальной области видимости функции, то она будет доступна также в локальной области видимости внутри блока другой функции, находящегося в блоке этой функции, если эта переменная там не переопределена. Т.о., аргумент <code>fun</code> функции <code>decorated</code> доступен внутри функции <code>wrapper</code>, определенной в блоке <code>decorated</code>.</p> 
+<p>Основное достоинство такого приема в том, что функцию <code>decorated</code> можно применять к любой функции, при этом не внося изменений в эти функции. Сделаем что-нибудь более полезное, чем выводить имя функции и аргумент. Например, добавить проверку допустимости аргумента функции.</p> 
+<div class="syntax_hilite"> 
+<div id="python-2"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">def</span> require_int<span style="color: black;">&#40;</span>fun<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> <span style="color: #ff7700;font-weight:bold;">not</span> <span style="color: #008000;">hasattr</span><span style="color: black;">&#40;</span>fun, <span style="color: #483d8b;">'__call__'</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">raise</span> <span style="color: #008000;">TypeError</span> <span style="color: black;">&#40;</span><span style="color: #483d8b;">'The argument should be a callable'</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> wrapper<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> <span style="color: #ff7700;font-weight:bold;">not</span> <span style="color: #008000;">isinstance</span><span style="color: black;">&#40;</span>arg, <span style="color: #008000;">int</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">raise</span> <span style="color: #008000;">TypeError</span> <span style="color: black;">&#40;</span><span style="color: #483d8b;">'The argument should be an integer'</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> fun<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> wrapper</div> 
+</div> 
+</div> 
+<p></p> 
+<p>Применив функцию <code>require_int</code> к любой функции ( <code>somefunc&nbsp;=&nbsp;require_int(somefunc)</code> ), в которой мы хотим в качестве аргумента видеть только целое число, мы тем самым обеспечим такую проверку, и нам не нужно кодировать такую проверку внутри всех таких функций.<br /> 
+Фактически, этот прием &mdash; и есть декорирование функций, и доступен в Python задолго до версии 2.4. Функции <code>decorated</code> и <code>require_int</code> &mdash; это и есть декораторы. В версии 2.4 лишь появилась специальный синтаксис, упрощающий декорирование.</p> 
+<h2>Синтаксис декораторов функций</h2> 
+<p>Синтаксис декорирования был заимствован из синтаксиса аннотаций Java. Для того, чтобы декорировать функцию, нужно перед ее объявлением указать имя функции-декоратора, предваряя его символом <code>@</code>. В нашем случае, выражение <code>foo&nbsp;=&nbsp;decorated(foo)</code> с помощью нового синтаксиса можно записать так:</p> 
+<div class="syntax_hilite"> 
+<div id="python-3"> 
+<div class="python">@decorated<br /> 
+<span style="color: #ff7700;font-weight:bold;">def</span> foo<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">print</span> arg</div> 
+</div> 
+</div> 
+<p></p> 
+<p>В функцию <code>decorated</code> никаких изменений вносить не надо.</p> 
+<p>Само собой, мы можем захотеть декорировать нашу функцию несколькими декораторами. Например, нам надо проверять, чтобы аргумент был целым числом, и при этом положительным целым. Мы можем записать это так:</p> 
+<div class="syntax_hilite"> 
+<div id="python-4"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">def</span> require_positive<span style="color: black;">&#40;</span>fun<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> <span style="color: #ff7700;font-weight:bold;">not</span> <span style="color: #008000;">hasattr</span><span style="color: black;">&#40;</span>fun, <span style="color: #483d8b;">'__call__'</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">raise</span> <span style="color: #008000;">TypeError</span> <span style="color: black;">&#40;</span><span style="color: #483d8b;">'The argument should be a callable'</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> wrapper<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> arg &lt;= <span style="color: #ff4500;">0</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">raise</span> <span style="color: #008000;">ValueError</span> <span style="color: black;">&#40;</span><span style="color: #483d8b;">'The argument should be a positive integer'</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> fun<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> wrapper&nbsp; </p> 
+<p>foo = require_positive<span style="color: black;">&#40;</span>foo<span style="color: black;">&#41;</span><br /> 
+foo = require_int<span style="color: black;">&#40;</span>foo<span style="color: black;">&#41;</span></div> 
+</div> 
+</div> 
+<p></p> 
+<p>А можем и так:</p> 
+<div class="syntax_hilite"> 
+<div id="python-5"> 
+<div class="python">@require_int<br /> 
+@require_positive<br /> 
+<span style="color: #ff7700;font-weight:bold;">def</span> foo<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">print</span> arg</div> 
+</div> 
+</div> 
+<p></p> 
+<p>Обратите внимание на порядок записи декораторов: это выражение эквивалентно <code>foo&nbsp;=&nbsp;require_int(require_positive(foo))</code>. Это важно, т.к. порядок применения декораторов часто имеет значение. В нашем случае сначала мы должны проверить целочисленность аргумента, т.е. функция, созданная в <code>require_int</code> должна быть вызвана прежде, чем функция, созданная в <code>require_positive</code> проверит, положительное ли число мы получили в аргументе.</p> 
+<p>Как мы видим, при декорировании <strong>без</strong> использования специального синтаксиса выражения пишутся в обратном порядке &mdash; <code>foo</code> будет ссылаться на результат последнего выражения, т.е.  <code>require_int</code> отработает первым. Т.о., специальный синтаксис также более удобен, т.к. мы перечисляем декораторы в прямом порядке.</p> 
+<p>Кроме того, такой синтаксис позволяет передачу декоратору аргументов. Например, мы хотим, чтобы аргумент был не менее какого-либо числа.</p> 
+<div class="syntax_hilite"> 
+<div id="python-6"> 
+<div class="python">@require_int<br /> 
+@require_minimum<span style="color: black;">&#40;</span><span style="color: #ff4500;">20</span><span style="color: black;">&#41;</span><br /> 
+<span style="color: #ff7700;font-weight:bold;">def</span> foo<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">print</span> arg</div> 
+</div> 
+</div> 
+<p></p> 
+<p>Стоп. Декоратор у нас принимает только один аргумент - функцию, которую мы декорируем. Каким образом нам написать такой декоратор, который принимает другие аргументы? Приведенное выше выражение эквивалентно такой записи: <code>foo&nbsp;=&nbsp;require_int(require_minimum(20)(foo))</code>. Т.е. декоратор здесь - не сама функция <code>require_minimum</code>, а результат ее вызова с аргументом <code>minimum</code>, который должен быть функцией, принимающей в качестве аргумента другую функцию. Напишем эту матрешку.</p> 
+<div class="syntax_hilite"> 
+<div id="python-7"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">def</span> require_minimum<span style="color: black;">&#40;</span>minimum<span style="color: black;">&#41;</span>:</p> 
+<p>&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> decorator<span style="color: black;">&#40;</span>fun<span style="color: black;">&#41;</span>:</p> 
+<p>&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> wrapper<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> arg &lt;minimum:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">raise</span> <span style="color: #008000;">ValueError</span> <span style="color: black;">&#40;</span><span style="color: #483d8b;">'The argument should not be less than %s'</span> % <span style="color: #008000;">str</span><span style="color: black;">&#40;</span>minimum<span style="color: black;">&#41;</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> fun<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; <br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> wrapper</p> 
+<p>&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> decorator</div> 
+</div> 
+</div> 
+<p></p> 
+<p>Функция <code>require_minimum</code> содержит определение функции <code>decorator</code>, которое, в свою очередь, содержит определение функции <code>wrapper</code>. У нас добавилась еще одна функция &mdash; <code>decorator</code>, которая принимает в качестве аргумента функцию, и из которой, в сущности, и будет создана функция-декоратор. Функция <code>require_minimum</code> оборачивает ее с той целью чтобы значение минимума передалось декоратору через nested scopes.</p> 
+<p>Само собой, <code>require_minimum</code> - это обычная функция, и может быть использована для создания специализированных декораторов, которые уже не потребуют аргумента <code>minimum</code>, а будут проверять минимальное значение в соответствие с переданным <code>require_minimum</code>  аргументом.<br /> 
+Например, наш декоратор <code>require_positive</code> - это частный случай <code>require_minimum</code>, соответственно, для того, чтобы получить эквивалентный по функциональности декоратор, мы можем сделать так:</p> 
+<div class="syntax_hilite"> 
+<div id="python-8"> 
+<div class="python">require_positive = require_minimum<span style="color: black;">&#40;</span><span style="color: #ff4500;">1</span><span style="color: black;">&#41;</span></div> 
+</div> 
+</div> 
+<p></p> 
+<p>Как верно замечает Макс Ищенко, декоратором может служить любой объект, который можно вызвать на исполнение. Такой объект можно сконструитовать, определив в его классе метод <code>__call__</code>. Таким образом, <code>require_minimum</code> можно записать и так:</p> 
+<div class="syntax_hilite"> 
+<div id="python-9"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">class</span> require_minimum<span style="color: black;">&#40;</span><span style="color: #008000;">object</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> <span style="color: #0000cd;">__init__</span><span style="color: black;">&#40;</span><span style="color: #008000;">self</span>, minimum<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #008000;">self</span>.<span style="color: black;">minimum</span> = minimum</p> 
+<p>&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> <span style="color: #0000cd;">__call__</span><span style="color: black;">&#40;</span><span style="color: #008000;">self</span>, fun<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> wrapper<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> arg &lt;self.<span style="color: black;">minimum</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">raise</span> <span style="color: #008000;">ValueError</span> <span style="color: black;">&#40;</span><span style="color: #483d8b;">'The argument should be not less than %s'</span> % <span style="color: #008000;">str</span><span style="color: black;">&#40;</span><span style="color: #008000;">self</span>.<span style="color: black;">minimum</span><span style="color: black;">&#41;</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> fun<span style="color: black;">&#40;</span>arg<span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp;<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> wrapper</div> 
+</div> 
+</div> 
+<p></p> 
+<p>В этом случае аргумент <code>minimum</code> передается не функции-"матрешке", а конструктору класса. Получившийся объект будет иметь метод <code>__call__</code>, который и будет нашим декоратором.</p> 
+<h2>Применение декораторов</h2> 
+<p>Декораторы применяются достаточно широко. Сфера применения - проверка допустимости аргументов,  перехват и изменение аругментов функций, перехват и изменение  значений возврата функций,  проверка дополнительных условий и т.п. Рассмотрим несколько примеров.</p> 
+<h3>classmethod, staticmethod</h3> 
+<p>При объявлении методов классов поведением по умолчанию будет оборачивание функций в объекты методов, которые при вызове вызывают исходные функции, передавая в качестве первого аргумента экземпляр класса. Подробнее об этом можно почитать у меня в <a href="http://www.ragbag.ru/2006/11/02/python_descriptors/">статье про дескрипторы</a>.</p> 
+<p>Это поведение можно переопределить &mdash; как и почти все в Python :)<br /> 
+Если объявление метода предварить декоратором <code>classmethod</code>, то будет создан объект-метод, который в первом аргументе функции будет передавать не экземпляр класса, а сам класс.</p> 
+<div class="syntax_hilite"> 
+<div id="python-10"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">class</span> X<span style="color: black;">&#40;</span><span style="color: #008000;">object</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; @<span style="color: #008000;">classmethod</span><br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> myClassMethod<span style="color: black;">&#40;</span>cls<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">print</span> cls</div> 
+</div> 
+</div> 
+<p></p> 
+<p>При вызове метода <code>myClassMethod</code> как через сам класс <code>X</code>, так и через экземпляр этого класса, в переменная <code>cls</code> будет ссылаться на класс <code>X</code>.</p> 
+<p>Если объявление метода предварить декоратором <code>staticmethod</code>, то будет создан объект-метод, который никак не будет изменять список аргументов, переданный методу. Метод будет вызван как будто это обычная функция, не имеющая представления о состоянии класса или экземпляра класса.</p> 
+<h3>Django: проверка аутентификации</h3> 
+<p>Для проверки аутентификации в Django есть удобный декоратор <code>login_required</code>. Если мы хотим, чтобы функция-view выполнилась только в том случае, если пользователь прошел процедуру аутентификации, достаточно задекорировать наш view при помощи <code>login_required</code>. Если пользователь не аутентифицирован, то он будет перенаправлен на страницу логина.</p> 
+<div class="syntax_hilite"> 
+<div id="python-11"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">from</span> django.<span style="color: black;">contrib</span>.<span style="color: black;">auth</span>.<span style="color: black;">decorators</span> <span style="color: #ff7700;font-weight:bold;">import</span> login_required<br /> 
+@login_required<br /> 
+<span style="color: #ff7700;font-weight:bold;">def</span> my_view<span style="color: black;">&#40;</span>request<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #808080; font-style: italic;"># do something </span></div> 
+</div> 
+</div> 
+<p></p> 
+<p>Декоратор <code>login_required</code> определен следующим образом:</p> 
+<div class="syntax_hilite"> 
+<div id="python-12"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">def</span> user_passes_test<span style="color: black;">&#40;</span>test_func, login_url=LOGIN_URL<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> _dec<span style="color: black;">&#40;</span>view_func<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> _checklogin<span style="color: black;">&#40;</span>request, *args, **kwargs<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> test_func<span style="color: black;">&#40;</span>request.<span style="color: #dc143c;">user</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> view_func<span style="color: black;">&#40;</span>request, *args, **kwargs<span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> HttpResponseRedirect<span style="color: black;">&#40;</span><span style="color: #483d8b;">'%s?%s=%s'</span> % <span style="color: black;">&#40;</span>login_url, REDIRECT_FIELD_NAME, quote<span style="color: black;">&#40;</span>request.<span style="color: black;">get_full_path</span><span style="color: black;">&#40;</span><span style="color: black;">&#41;</span><span style="color: black;">&#41;</span><span style="color: black;">&#41;</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; _checklogin.__doc__ = view_func.__doc__<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; _checklogin.<span style="color: #0000cd;">__dict__</span> = view_func.<span style="color: #0000cd;">__dict__</span></p> 
+<p>&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> _checklogin<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> _dec</p> 
+<p>login_required = user_passes_test<span style="color: black;">&#40;</span><span style="color: #ff7700;font-weight:bold;">lambda</span> u: u.<span style="color: black;">is_authenticated</span><span style="color: black;">&#40;</span><span style="color: black;">&#41;</span><span style="color: black;">&#41;</span></div> 
+</div> 
+</div> 
+<p></p> 
+<p>В данном случае функция <code>_dec</code> внутри <code>user_passes_test</code> по назначению соответствует функции <code>decorator</code>, а функция <code>_checklogin</code> &mdash; <code>wrapper</code> в нашей <code>require_minimum</code>.  Функция  <code>_checklogin</code> оборачивает наш view и вызывает его только если переданная <code>user_passes_test</code> тестовая функция возвращает истинное значение, в противном случае производится редирект.<br /> 
+Заметим, что атрибутам функции <code>_checklogin</code> присваиваются атрибуты исходного view, т.к. место view занимает уже другая функция. Если этого не делать, арибуты исходной функции будут недоступны.</p> 
+<h3>Django: управление транзакциями в базе данных</h3> 
+<p>Для управления транзакциями в Django существует несколько декораторов. Рассмотрим декоратор <code>commit_on_success</code>.</p> 
+<div class="syntax_hilite"> 
+<div id="python-13"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">from</span> django.<span style="color: black;">db</span>.<span style="color: black;">transaction</span> <span style="color: #ff7700;font-weight:bold;">import</span> commit_on_success<br /> 
+@commit_on_success<br /> 
+<span style="color: #ff7700;font-weight:bold;">def</span> my_func<span style="color: black;">&#40;</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #808080; font-style: italic;"># do something </span></div> 
+</div> 
+</div> 
+<p></p> 
+<p>Код функции:</p> 
+<div class="syntax_hilite"> 
+<div id="python-14"> 
+<div class="python"><span style="color: #ff7700;font-weight:bold;">def</span> commit_on_success<span style="color: black;">&#40;</span>func<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">def</span> _commit_on_success<span style="color: black;">&#40;</span>*args, **kw<span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">try</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; enter_transaction_management<span style="color: black;">&#40;</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; managed<span style="color: black;">&#40;</span><span style="color: #008000;">True</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">try</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; res = func<span style="color: black;">&#40;</span>*args, **kw<span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">except</span> <span style="color: #008000;">Exception</span>, e:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> is_dirty<span style="color: black;">&#40;</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; rollback<span style="color: black;">&#40;</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">raise</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">else</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">if</span> is_dirty<span style="color: black;">&#40;</span><span style="color: black;">&#41;</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; commit<span style="color: black;">&#40;</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> res<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">finally</span>:<br /> 
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; leave_transaction_management<span style="color: black;">&#40;</span><span style="color: black;">&#41;</span><br /> 
+&nbsp; &nbsp; <span style="color: #ff7700;font-weight:bold;">return</span> _commit_on_success</div> 
+</div> 
+</div> 
+<p></p> 
+<p>Декоратор <code>commit_on_success</code> начинает транзакцию перед выполнением исходной функции, если транзакция еще не начата, и выполняет функцию в блоке <code>try ... except</code>. В случае возникновения в функции исключительной ситуации транзакция откатывается. В случае успешного завершения функции (критерий успешности &mdash; отсутствие исключительных ситуаций) транзакция фиксируется.</p> 
+<p><a href="http://www.python.org/dev/peps/pep-0318/" target="_blank">Оригинальный PEP про декораторы функций и методов</a>.</p> 
+</div>
+{% endblock %}

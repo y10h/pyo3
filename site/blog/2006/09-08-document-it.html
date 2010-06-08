@@ -1,0 +1,118 @@
+{% meta %}
+    tags: [documenting, reviews, pydoc, docs, tools, pudge, epydoc]
+    title: Документируй это
+{% endmeta %}
+
+{% mark body %}
+<p>У Python есть одна замечательная особенность - у него есть встроенные средства документирования кода. Так называемые docstring'и. О них и пойдет речь...
+</p>
+<p>
+<!--more-->
+
+   <a href="http://www.python.org/dev/peps/pep-0257/">Docstring</a> - (сокращение от documentation string, строка документации) встроенное средство документирования модулей, функций, классов и методов. Делается очень просто - сразу после определения указывается строковое значение, которое и будет docstring'ом.
+</p>
+<pre><code>&gt;&gt;&gt; def test():
+...    &quot;This is the test's docstring&quot;
+...    print &quot;opa&quot;
+
+</code></pre><p>Получить доступ к docstring можно так:
+</p>
+<pre><code>&gt;&gt;&gt; test.__doc__
+&quot;This is the test's docstring&quot;
+</code></pre><p>Либо так:
+</p>
+<pre><code>&gt;&gt;&gt; help(test)
+Help on function test in module __main__:
+
+test()
+    This is the test's docstring
+</code></pre><p>Существуют инструменты, которые позволяют извлекать docstring не по одиночке, а для целого модуля/пакета. О них и пойдет речь.</p>
+
+<h2>pydoc</h2>
+<p><a href="http://docs.python.org/lib/module-pydoc.html">Pydoc</a> входит в стандартную поставку Python. Для того, чтобы сгенерировать HTML-документацию для модуля, достаточно выполнить:</p>
+
+<pre><code>pydoc -w module_name
+</code></pre><p>и Вы на выходе получите <code>module_name.html</code>. Одна интересная возможность pydoc - использование его как http-сервера для документации по всем установленным модулям. Достаточно запустить pydoc с параметром -g:</p>
+<pre><code>pydoc -g
+</code></pre><p>PyDoc показывает docstring как есть, он не использует какие-либо правила форматирования.</p>
+
+<h2>HappyDoc</h2>
+<p><a href="http://happydoc.sf.net/">HappyDoc</a> - достаточно популярный инструмент (используется в достаточно крупных проектах, например <a href="http://numpy.scipy.org/">NumPy</a>), хотя прекратил свое развитие где-то три года назад. В отличии от pydoc, использующего интроспекцию (т.е. импортирует модуль и &quot;обходит&quot; все объекты) для создания документации, HappyDoc самостоятельно разбирает Python-исходники и уже по результатам разбора составляет документацию. Такой подход имеет как свои плюсы, так и минусы. Положительные стороны:
+
+</p>
+<ul>
+ <li>
+     можно обрабатывать модули, у которых не удовлетворены зависимости, либо не желательно их импортировать
+ </li>
+ <li>
+     есть возможно обрабатывать комментарии, которые при интроспекции &quot;теряются&quot;
+ </li>
+</ul>
+<p>Отрицательные:
+
+</p>
+<ul>
+ <li>
+     нет возможности обрабатывать C-модули
+ </li>
+ <li>
+     сложности в обработки модуля, &quot;хитрым&quot; образом меняющего пространство имен, или, например, генерирующегося &quot;на лету&quot;
+ </li>
+
+</ul>
+<p>HappyDoc достаточно гибок - поддерживает различные типы разметок (<a href="http://www.python.org/community/sigs/current/doc-sig/stext/">StructuredText</a>, <a href="http://www.zope.org//Members/jim/StructuredTextWiki/StructuredTextNGRules">StructuredTextNG</a>, plain text, raw text), можно создать свой собственный.</p>
+
+<h2>pudge</h2>
+<p><a href="http://pudge.lesscode.org/">Pudge</a> - в отличии от остальных упомянутых инструментов, ориентирован, в первую очередь, для публикации API-документации в интернете. Также возможна интеграция с <a href="http://trac.edgewall.org/">Trac</a>. Внешний вид готовой документации задается шаблонами <a href="http://www.kid-templating.org/">kid</a>. Для построения документации использует как разбор кода собственным парсером, так и интроспекцию. Внутри docstring'ов позволяет форматировать текст по правилам <a href="http://docutils.sourceforge.net/rst.html">reStructuredText</a>. Одна из особенностей pudge - помимо представления информации из docsting'ов, он сохраняет в html весь код модуля.</p>
+
+<p>Из недостатков могу отметить &quot;неровности&quot; в процессе установки - кое-где приходится &quot;напильником&quot; дорабатывать. Однако автор сразу предупреждает о том, что pudge находится в процессе активной доработки.</p>
+
+<h2>epydoc</h2>
+<p><a href="http://epydoc.sf.net/">Epydoc</a> - на мой взгляд, наиболее интересный инструмент для создания API-документации. Я рассмотрю версию 3.0, которая обладает более широкими возможностями, чем предыдущая 2.1.
+</p>
+<p>Умеет сохранять &quot;расцвеченный&quot; код модуля, для построения документации использует и интроспекцию, и разбор кода. В этом плане он схож с pudge. Шаблоны он не использует, лишь при помощи css можно менять цветовую схему. Помимо html умеет выводить в LaTeX и pdf. Из отличительных особенностей отмечу использование собственной разметки <a href="http://epydoc.sourceforge.net/epytext.html">epytext</a>, хотя поддерживаются <a href="http://docutils.sourceforge.net/rst.html">reStructuredText</a> и <a href="http://java.sun.com/j2se/javadoc/">JavaDoc</a>. Далее, при помощи <a href="http://www.graphviz.org/">graphviz</a> умеет строить UML-диаграммы классов.</p>
+
+<p>В целом, мне он понравился больше всех. В скором времени расскажу об epydoc чуть подробнее.</p>
+
+<h2>Примеры</h2>
+<p>Для примера написал ничего-не-делающий модуль foo:
+</p>
+<pre><code>&quot;&quot;&quot;Module's docstring&quot;&quot;&quot;
+
+__docformat__ = &quot;restructuredtext&quot;
+
+CONST='Opa-la' #: doccomment for CONST
+
+def bar(x):
+    &quot;&quot;&quot;bar - returns repr(x)&quot;&quot;&quot;
+
+    return repr(x)
+
+class Foo(object):
+    &quot;&quot;&quot;Example of class'es doctstring&quot;&quot;&quot;
+
+    classattr = &quot;Class attribute&quot; #: doccomment for class attribute
+
+    def __init__(self, arg):
+        &quot;&quot;&quot;
+        Constructor for foo object
+
+        :param arg: Dummy argument for constructor
+        :type arg: basestring
+        &quot;&quot;&quot;
+        self.arg = arg
+
+    def go(self, parm):
+        &quot;&quot;&quot;
+
+        Dummy action for object Foo
+
+        :param parm: Dummy parameter of method
+
+        :return: Returns parm
+        &quot;&quot;&quot;
+        x = repr(parm) #: doccomment for x: x is a representation of parm
+        return parm
+</code></pre><p>И обработал его каждым из упомянутых инструментов. Результат можете взять <a href="http://pythy.googlecode.com/svn/trunk/document-it.zip">здесь</a>
+</p>
+{% endmark %}

@@ -1,0 +1,189 @@
+{% meta %}
+    tags: [wsgi, docs]
+    title: WSGI, введение
+{% endmeta %}
+
+{% mark body %}
+<p>С аббревиатурой WSGI я столкнулся, когда возникла задача развертывания Django-приложения, а mod_python у меня что-то не захотел работать. И в то время для меня WSGI было неким buzz-word, туманным и далеким. Так или иначе, Django я &quot;завел&quot; при помощи <a href="http://trac.saddi.com/flup/">flup</a> и <a href="http://www.lighttpd.net/">lighttpd</a>, но &quot;виски&quot; засел у меня занозой в мозгу.
+</p>
+
+<!--more-->
+
+<p>Вспомнилась эта заноза не так давно, когда я стал читать блог Бена Бангерта <a href="http://www.groovie.org/">Groovie</a>. Бен апологет WSGI и создатель веб-фреймворка <a href="http://pylonshq.com/">Pylons</a> (надеюсь, у меня будет время рассказать о нем). Отправной точкой в моем &quot;погружении&quot; стали уже <a href="http://www.pyobject.ru/blog/post/interesting-articles/">упомянутые мной статьи на XML.com</a>. А мотивом к написанию этой статьи стал тот факт, что информации по WSGI на русском просто нет. Что ж, постараюсь восполнить этот пробел.
+
+</p>
+
+<h2>Теория</h2>
+<p><a href="http://wsgi.org/wsgi" title="Web Server Gateway Interface">WSGI</a> - стандарт обмена данными между веб-сервером (backend) и веб-приложением (frontend). Под это определение попадают многие вещи, тот же самый <a href="http://ru.wikipedia.org/wiki/CGI">CGI</a> :) Так что поясню.
+</p>
+<p>Во-первых, WSGI - Python-специфичный стандарт, его описывает <a href="http://www.python.org/dev/peps/pep-0333/">PEP 333</a>. Во-вторых, он еще не принят (статус Draft, черновик). Эти оговорки для того, чтобы не испытывать лишних иллюзий. Между тем, стандарт нужный и уже используемый. Для меня WSGI это в первую очередь возможность комбинировать различные back- и frontend'ы.
+</p>
+<p>Теперь что касается самого стандарта. Он описывает интерфейсы веб-приложения и веб-сервера.
+</p>
+
+<p><em>Приложение</em> - принимает в качестве параметров переменные окружения (в виде словаря) и исполняемый объект выполнения запроса. Возвращает итератор.
+</p>
+<p><em>Сервер</em> - тут чуть сложнее. В переменных окружения, к стандартным переменным веб-сервера, добавляются WSGI-специфичные. Особо останавливаться я на этом не буду, сошлюсь лишь на все тот же PEP 333, где приведен пример. Просто-напросто реализация на стороне сервера меня интересует постольку-поскольку, поэтому на ней не задерживаюсь.
+</p>
+<p><em>Прослойка</em>, middleware - самое интересное. Middleware &quot;работает&quot; в обе стороны. Т.е. у нее входной и выходной интерфейс идентичны. Я бы провел аналогию с <a href="http://www.ragbag.ru/2006/11/07/python_decorators/">декоратором</a>. Middleware добавляет некую функциональность в исходное веб-приложение, например live debug, или http auth. Причем, можно выстраивать цепочки middleware.
+</p>
+<p>Теперь попробуем все это на практике...
+
+</p>
+
+<h2>Практика</h2>
+<p>Итак, погружаемся в WSGI. Пишем простенькое WSGI-приложение:
+</p>
+<pre><code>def app(environ, start_response):
+    start_response('200 OK', [('Content-type', 'text/plain')])
+    return ['Hello here']
+</code></pre><p>Все достаточно просто - как и говорилось выше, приложение принимает в качестве аргументов словарь переменных окружения (<code>environ</code>) и исполняемый объект выполнения запроса (<code>start_response</code>). Далее, посылаем начало ответа серверу и возвращаем сам ответ в виде итератора (в данном случае - в виде обычного списка).
+</p>
+<p>Теперь встает вопрос о запуске нашего приложения. Для этого воспользуемся библиотекой <a href="http://cheeseshop.python.org/pypi/wsgiref">wsgiref</a>. Счастливчики с Python 2.5 в этом месте широко улыбаются, потому что у них <code>wsgiref</code> уже есть. Запускаем так:
+
+</p>
+<pre><code>from wsgiref import simple_server
+server = simple_server.WSGIServer(
+            ('', 8080),
+            simple_server.WSGIRequestHandler,
+        )
+server.set_app(app)
+server.serve_forever()
+</code></pre><p>Тоже все достаточно просто - создаем объект сервера со стандартным обработчиком, задаем ему порт 8080 для ожидания соединений, указываем какое WSGI-приложение выполнять и запускаем сервер.
+</p>
+<p>Пока что преимущества WSGI не ощущаются. 
+</p>
+<p>Теперь усложним задачу. Попробуем написать такой сервер, который бы работал с произвольным WSGI-приложением, и приложение, которое бы работало с произвольным WSGI-сервером. Что ж, приступим.
+</p>
+<p>В начале, определю, что значит &quot;произвольный&quot;: скрипту, который реализует тот или иной компонент, передается в качестве аргумента &quot;путь&quot; к другому, парному, компоненту. И пусть они взаимодействуют. Чтобы не усложнять код, я написал маленький модуль, <code>helper</code>, который и делает всю &quot;машинерию&quot; по преобразованию полного имени компонента (<code>пакет.модуль.объект</code>) в компонент-объект. Итак, наше &quot;тривиальное приложение&quot; стало выглядеть так:
+</p>
+<pre><code>def app(environ, start_response):
+    start_response('200 OK', [('Content-type', 'text/html')])
+    sorted_keys = environ.keys()
+    sorted_keys.sort()
+    result = ['&lt;html&gt;&lt;body&gt;&lt;h1&gt;TrivialWSGIApp in action&lt;/h1&gt;'] + \
+         ['&lt;p&gt;Sample WSGI application. Just show your environment.&lt;/p&gt;&lt;p&gt;&lt;ul&gt;'] + \
+         ['&lt;li&gt; %s =&gt; %s&lt;/li&gt;' % (str(k), str(environ[k])) for k in sorted_keys] + \
+         ['&lt;/ul&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;']
+    return result
+
+if __name__ == '__main__':
+    import sys
+    import helper
+
+    server = helper.get_arg(sys.argv, &quot;Usage: trivial_wsgi_app.py package.wsgi.server_callable&quot;)
+    server(app)
+
+</code></pre><p>Немного &quot;усложнили&quot; приложение - теперь оно показывает доступные переменные окружения, ну и плюс код, запускающий парный компонент - WSGI-сервер, переданный как параметр.
+</p>
+<p>А &quot;тривиальный сервер&quot; стал выглядеть так:
+</p>
+<pre><code>from wsgiref import simple_server, validate
+
+class TrivialWSGIServer(object):
+    def __init__(self, app):
+        self.app = app
+        self.server = simple_server.WSGIServer(
+            ('', 8080),
+            simple_server.WSGIRequestHandler,
+        )
+        self.server.set_app(validate.validator(self.app))
+
+    def serve(self):
+        self.server.serve_forever()
+
+def runner(app):
+    TrivialWSGIServer(app).serve()
+
+if __name__ == '__main__':
+    import sys
+    import helper
+
+    app = helper.get_arg(sys.argv, &quot;Usage: trivial_wsgi_server.py package.wsgi.app&quot;)
+    runner(app)
+</code></pre><p>У него добавились: &quot;исполнитель&quot; <code>runner</code>, чтобы в один шаг запускать приложение на запуск и код для запуска парного компонента - WSGI-приложения. Отмечу одну из &quot;прослоек&quot; (middleware), которая здесь используется - <code>validator</code> - проверяет, что &quot;диалог&quot; между сервером и приложением идет в рамках стандарта.
+
+</p>
+<p>Запуск осуществляется следующим образом:
+</p>
+<pre><code>trivial_wsgi_app.py trivial_wsgi_server.runner
+</code></pre><p>или так:
+</p>
+<pre><code>trivial_wsgi_server.py trivial_wsgi_app.app
+</code></pre><p>Усложняем задачу. Теперь напишем WSGI-сервер средствами <a href="http://twistedmatrix.com/">Twisted</a>, но с таким же &quot;интерфейсом запуска&quot;
+</p>
+<pre><code>from twisted.internet import reactor
+from twisted.web2 import wsgi, channel, server
+
+class TwistedWSGIServer(object):
+    def __init__(self, app):
+        self.app = app
+        self.wsgi_res = wsgi.WSGIResource(app)
+        self.site = server.Site(self.wsgi_res)
+        self.factory = channel.HTTPFactory(self.site)
+
+    def serve(self):
+        reactor.listenTCP(8080, self.factory)
+        reactor.run()
+
+def runner(app):
+    TwistedWSGIServer(app).serve()
+
+if __name__ == '__main__':
+    import sys
+    import helper
+
+    app = helper.get_arg(sys.argv, &quot;Usage: twisted_wsgi_server.py package.wsgi.app&quot;)
+    runner(app)
+</code></pre><p>Здесь мы воспользовались WSGI-сервером, встроенным в Twisted Web2, ну а процедура старта Twisted-приложения, думаю Вам <a href="http://www.pyobject.ru/blog/post/interesting-articles/">упомянутые мной статьи на XML.com</a>. А мотивом к написанию этой статьи стал тот факт, что информации по WSGI на русском просто нет. Что ж, постараюсь восполнить этот пробел.
+
+</p>
+<p>Теперь пробуем запустить с нашим приложением:
+</p>
+<pre><code>twisted_wsgi_server.py trivial_wsgi_app.app
+</code></pre><p>Работает. Еще больше усложним задачу и напишем <a href="http://divmod.org/trac/wiki/DivmodNevow">Nevow</a>-приложение с WSGI-интерфейсом (правда, с некоторыми <a href="http://divmod.org/trac/ticket/1743">оговорками</a>):
+</p>
+<pre><code>from nevow import rend, loaders, wsgi, tags, inevow
+
+class NevowPage(rend.Page):
+
+    addSlash = True
+
+    docFactory = loaders.stan(
+        tags.html[
+            tags.head[tags.title['Nevow WSGI hello app']],
+            tags.body[
+                tags.h1(id='title')['Nevow WSGI hello app'],
+                tags.p(id='welcome')['Welcome to the Nevow (WSGI powered). Just show your environment.'],
+                tags.p(id='environment')[tags.invisible(render=tags.directive('environ'))]
+            ]
+        ]
+    )
+
+    def render_environ(self, context, data):
+        environ = inevow.IRequest(context).environ
+        sorted_keys = environ.keys()
+        sorted_keys.sort()
+        inner = [tags.li[k, &quot; =&gt; &quot;, str(environ[k])] for k in sorted_keys]
+        return tags.ul[inner]
+
+app = wsgi.createWSGIApplication(NevowPage())
+
+if __name__ == '__main__':
+    import sys
+    import helper
+
+    server = helper.get_arg(sys.argv, &quot;Usage: nevow_wsgi_app.py package.wsgi.server_callable&quot;)
+    server(app)
+
+</code></pre><p>Особо углубляться в код не буду, тем более есть желание сделать Nevow одной из тем разговора.
+</p>
+<p>Теперь можно комбинировать WSGI-сервера и WSGI-приложения в любых сочетаниях - результат будем идентичным. Естественно, что часть возможностей, которые не укладываются в WSGI, будут не доступны. Например в Twisted Web2, WSGI-приложение выполняется в отдельном потоке, так что воспользоваться асинхронными &quot;фишками&quot; Twisted не получится. Поэтому использовать Nevow с Twisted через WSGI - нонсенс. Об использовании Twisted в веб-приложениях, я думаю, расскажу в ближайшее время.  А приведенный код, как всегда, можно получить с <a href="http://pythy.googlecode.com/svn/trunk/wsgi/">code.google.com</a>.
+</p>
+
+<h2>Заключение</h2>
+<p>WSGI достаточно простое и эффективное решение проблемы взаимодействия веб-сервера и веб-приложения. Как любой компромисс, он не идеален &quot;везде и всюду&quot;, однако для большинства случаев - это разумный выбор. <a href="http://pythonpaste.org/DeveloperGuidelines.html">Некоторые</a> используют WSGI не только как стандарт взаимодействия веб-сервера и веб-приложения, но и обособленных библиотек между собой. Возможно, в чем то этот подход оправдан.
+</p>
+<p>Продолжение следует...
+</p>
+{% endmark %}
