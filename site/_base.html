@@ -15,7 +15,7 @@
 
     <link rel="alternate" type="appliction/atom+xml"
           title="{{ site.title }} feed"
-          href="http://feeds.feedburner.com/pyobject">
+          href="http://feeds.feedburner.com/{{ site.feedburner }}">
 
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
 
@@ -29,7 +29,7 @@
 
 <body>
     <div id="header">
-            <h1><a href="/">{{ site.title }}</a></h1>
+            <h1><a href="/">{{ site.title }}</a> <a href="http://feeds.feedburner.com/{{ site.feedburner }}"><img height="32px" width="32px" src="{{ url_for('static/img/feed-gray-32.png') }}"></a></h1>
             <h2>{{ site.description }}</h2>
     </div>
 
