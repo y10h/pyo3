@@ -5,10 +5,13 @@
 {% block content %}
 
 <div id="root">
-    <p>Читайте <a href="/blog/">блог</a>,
-    следите за <a href="http://twitter.com/{{ site.author_twitter }}">твитами</a>, будьте
-    в курсе <a href="http://{{ site.author_chimp }}.mp">происходящего</a>.</p>
-    <p>wbr, <a href="/about/">{{ site.author }}</a>.</p>
+    <p>Читайте
+<a href="{{ url_for('blog') }}"><img width="16px" height="16px" src="{{ url_for('static/img/pyo-16.png') }}" />&nbsp;блог</a>,
+следите за
+<a href="http://twitter.com/{{ site.author_twitter }}"><img width="16px" height="16px" src="{{ url_for('static/img/twitter-small.png') }}" />&nbsp;твитами</a>,
+будьте в курсе
+<a href="http://{{ site.author_chimp }}.mp"><img width="16px" height="16px" src="{{ url_for('static/img/chimp-small.png') }}" />&nbsp;происходящего</a>.</p>
+    <p>wbr, <a href="{{ url_for('about') }}"><img width="16px" height="16px" src="{{ url_for('static/img/iam-small.png') }}" />&nbsp;{{ site.author }}</a>.</p>
 </div>
 
 {% endblock %}
