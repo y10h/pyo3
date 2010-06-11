@@ -1,5 +1,9 @@
 {% extends "_base.html" %}
 
+{% block extrahead %}
+<script type="text/javascript" src="{{ url_for('static/js/friendfeed.js') }}"></script>
+{% endblock %}
+
 {% block content %}
 <a href="http://github.com/{{ site.author_github }}">
     <img style="position: absolute; top: 0; left: 0; border: 0;"
@@ -31,7 +35,7 @@
     </div>
     
     <div id="notes-container">
-        <h3>Мнения</h3>
+        <h3><img width="16px" height="16px" src="{{ url_for('static/img/friendfeed-small.png') }}"> <a href="http://friendfeed.com/{{ site.author_friendfeed }}">Комментарии</a></h3>
         <ul class="notes">
         </ul>
     </div>
@@ -41,5 +45,9 @@
 </div>
 
 </div>
+
+<script>
+putFFUrl('{{ entry.get_absolute_url() }}', '{{ site.author_friendfeed }}', '#notes-container') 
+</script>
 
 {% endblock %}
