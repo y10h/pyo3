@@ -1,0 +1,21 @@
+{% extends "_base.html" %}
+
+{% block extrahead %}
+<script type="text/javascript">location.replace("{{ entry.linkto }}");</script>
+<meta http-equiv="Refresh" content="0; URL={{ entry.linkto }}">
+{% endblock %}
+
+{% block content %}
+
+<div id="posts">
+    <div class="post">
+        <div class="link">
+            <h3><a href="{{ entry.linkto }}">{{ entry.title }}</a></h3>
+            <div class="description">
+            {{ entry.description }}
+            </div>
+        </div>
+
+</div>
+
+{% endblock %}
