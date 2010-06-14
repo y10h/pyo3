@@ -4,7 +4,7 @@ Extensions for Cyrax (http://pypi.python.org/pypi/cyrax) for pyobject.ru v3
 
 from cyraxlib import core, events, models,  utils
 
-class PostPermalink(object):
+class PostLink(object):
     """
     Links from /blog/post/<slug>/ to /blog/<YYYY>/<MM>/<DD>/<slug>/
     """
@@ -33,14 +33,14 @@ class PostPermalink(object):
 
 
 
-def add_posts_permalinks(site):
-    site.permalinks = {}
+def add_post_links(site):
+    site.postlinks = {}
     for post in site.posts:
-        path = '%s%s.html' % (PostPermalink.prefix, post.slug)
-        site.entries.append(core.Entry(site, path, '_permalink.html'))
-        site.permalinks[post.slug] = post
+        path = '%s%s.html' % (PostLink.prefix, post.slug)
+        site.entries.append(core.Entry(site, path, '_postlink.html'))
+        site.postlinks[post.slug] = post
 
 def callback(site):
-    events.events.connect('site-traversed', add_posts_permalinks)
-    models.TYPE_LIST.append(PostPermalink)
+    events.events.connect('site-traversed', add_post_links)
+    models.TYPE_LIST.append(PostLink)
 

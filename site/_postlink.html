@@ -1,0 +1,22 @@
+{% extends "_base.html" %}
+
+{% block extrahead %}
+<script type="text/javascript">location.replace("{{ site.postlinks[entry.slug].get_absolute_url() }}");</script>
+<meta http-equiv="Refresh" content="0; URL={{ site.postlinks[entry.slug].get_absolute_url() }}">
+{% endblock %}
+
+{% block content %}
+
+<div id="posts">
+    <div class="post">
+        <div class="link">
+            <h3><a href="{{ site.postlinks[entry.slug].get_url() }}">{{ site.postlinks[entry.slug].title }}</a></h3>
+            <div class="description">
+            Long time ago there was an article {{ site.postlinks[entry.slug].title }}, but now it moved
+            to <a href="{{ site.postlinks[entry.slug].get_url() }}">{{ site.postlinks[entry.slug].get_absolute_url() }}</a>
+            </div>
+        </div>
+
+</div>
+
+{% endblock %}
