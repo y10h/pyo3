@@ -2,6 +2,14 @@
   title: root
 {% endmeta %}
 
+{% block extrahead %}
+<link rel="openid.server" href="http://www.myopenid.com/server">
+<link rel="openid.delegate" href="http://{{ site.author_myopenid }}.myopenid.com/">
+<link rel="openid2.local_id" href="http://{{ site.author_myopenid }}.myopenid.com/">
+<link rel="openid2.provider" href="http://www.myopenid.com/server">
+<meta http-equiv="X-XRDS-Location" content="http://www.myopenid.com/xrds?username={{ site.author_myopenid }}.myopenid.com"> 
+{% endblock %}
+
 {% block content %}
 
 <div id="root">
