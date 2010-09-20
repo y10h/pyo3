@@ -1,5 +1,5 @@
 {% meta %}
-    tags: [mine]
+    tags: [mine, events, pycamp]
     title: Еду в Киев
 {% endmeta %}
 

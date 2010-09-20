@@ -1,5 +1,5 @@
 {% meta %}
-    tags: [pycamp, conference]
+    tags: [pycamp, conference, events]
     title: 5 копеек о PyCamp
 {% endmeta %}
 
