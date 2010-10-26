@@ -11,7 +11,7 @@
 [Armin Ronacher](http://lucumr.pocoo.org/), [Andrew Godwin](http://aeracode.org/), [Michael Mahemoff](http://mahemoff.com/) — зубры,
 у которых есть чему поучиться. Я счастлив и доволен, что теперь
 код [Flask](http://flask.pocoo.org/)/[Werkzeug](http://werkzeug.pocoo.org/)
-и [South](http://south.aeracode.org/) у меня ассоциируется непосредственно
+и [South](http://south.aeracode.org/) у меня ассоциируется
 с вполне конкретными людьми.
 
 Какие-то огрехи в организации были, но я не считаю, что они были значимыми.

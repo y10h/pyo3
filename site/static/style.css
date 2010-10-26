@@ -60,7 +60,7 @@ em {
 body {
     background: #262523;
     color: #ddc;
-    font: normal 15px Helvetica, "Trebuchet MS", Arial, sans-serif;
+    font: normal 15px "Geneva", Helvetica, Arial, sans-serif;
     line-height: 1.5em;
 }
 
@@ -149,7 +149,7 @@ ol {
 }
 
 #header a, #header a:visited, #header a:active {
-    color: #eef;
+    color: #cbcbcb;
     text-decoration: none;
 }
 
