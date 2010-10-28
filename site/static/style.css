@@ -342,3 +342,14 @@ a.permalink:hover {
 #footer ul li a:hover {
     text-decoration: underline;
 }
+
+.slide {
+    text-align: center;
+}
+
+.slide .description {
+    text-align: left;
+    border-bottom: solid 1px #fff;
+    margin-bottom: 2em;
+}
+

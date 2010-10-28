@@ -1,0 +1,268 @@
+{% meta %}
+    tags: [pyres, celery, pycon, queue]
+    title: В очередь
+{% endmeta %}
+
+{% mark body %}
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.001.png') }}"
+         alt="Enqueue it. Yury Yurevich - oDesk corp. - @yurevich." />
+    <div class="description">
+        <p>
+            Эти слайды изначально были подготовлены для доклада в формате Печа Куча для PyCon UA, 24 октября 2010 года.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.002.png') }}"
+         alt="Web application like a tennis game" />
+    <div class="description">
+        <p>
+            Веб-приложение — как игра в теннис, вы не должны задерживать
+            "мяч" у себя. Получили запрос — как можно быстрее
+            обработали его — отдали ответ.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.003.png') }}"
+         alt="But what if task doesn't fit?" />
+    <div class="description">
+        <p>
+            Но что если задание не "влезает" в цикл запрос-ответ. Например,
+            вам нужно отправить несколько сотен писем, или послать твит,
+            а твиттер перегружен, вариантов множество
+        </p>
+        <p>
+            В этом случае вы принимаете запрос, быстро его обрабатываете и
+            как можно быстрее ставите задание в очередь. А очередь через
+            некоторое время выполнит задание.
+    </div>
+</div>
+
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.004.png') }}"
+         alt="Light weight" />
+    <div class="description">
+        <p>
+            Естественно, вначале хочется чего-то очень простого,
+            без дополнительных сервисов и зависимостей, например, чтобы
+            использовалось основное хранилище данных приложения.
+        </p>
+        <p>Плохая новость…</p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.005.png') }}"
+         alt="I don't know such" />
+    <div class="description">
+        <p>
+            Я таких инструментов не знаю.
+        </p>
+        <p>
+            Хорошая новость в том, что я знаю, где отложеннные задания
+            и очереди уже есть…
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.006.png') }}"
+         alt="Google AppEngine" />
+    <div class="description">
+        <p>
+            Это Google App Engine
+        </p>
+        <p>
+            Здесь уже есть всё то, что вам нужно для фонового выполнения
+            отложенных задач. За вас хорошенько подумали и сконструировали
+            неплохую архитектуру. Другое дело, что особой альтернативы
+            в рамках AppEngine у вас нет.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.007.png') }}"
+         alt="Middle weight" />
+    <div class="description">
+        <p>
+            Если рассматривать что-то более серьезное, что требует
+            внешнего хранилища…
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.008.png') }}"
+         alt="pyres" />
+    <div class="description">
+        <p>
+            То в этой категории мне очень нравится
+            <a href="http://github.com/binarydud/pyres">pyres</a>. Он прост
+            и незатейлив, но покрывает весь необходимый функционал. Он как
+            любимая отвёртка, которая просится к вам в руку.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.009.png') }}"
+         alt="pyres: redis backend" />
+    <div class="description">
+        <p>
+            Pyres использует Redis как хранилище заданий и очередей. Я думаю,
+            вы уже всё знаете о Redis благодаря великолепным докладам
+            <nobr><a href="http://aeracode.org/2010/10/24/pycon-ukraine-slides/">Эндрю Годвина</a></nobr>,
+            <nobr><a href="http://simonwillison/static/2010/redis-tutorial/">Саймона Виллисона</a></nobr> и
+            <nobr><a href="http://pycamp.org.ua/presentation/10">Александра Соловьева</a></nobr>.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.010.png') }}"
+         alt="pyres: web interface" />
+    <div class="description">
+        <p>
+            У pyres отличный веб-интефейс в котором вы видите работающих
+            worker'ов, актуальные очереди, задания с ошибками. Вы можете
+            сделать retry таким заданиям или удалить их. И конечно это WSGI,
+            так что проблем с интеграцией с существуещим приложением не будет.
+        </p>
+    </div>
+</div>
+
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.011.png') }}"
+         alt="pyres: compact" />
+    <div class="description">
+        <p>
+            Pyres весьма компактен. Вы за час-полтора сможете сделать ревью
+            кода. Причем вы можете облегчить его на треть, если вдруг вам
+            не нужен веб интерфейс.
+        </p>
+        <p>
+            Pyres действительно хорош и в 90% вам просто не нужны те фичи,
+            которых нет.
+        </p>
+    </div>
+</div>
+
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.012.png') }}"
+         alt="Heavy weight" />
+    <div class="description">
+        <p>
+            Конечно, существуют и более функциональные системы, где всё
+            по-взрослому.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.013.png') }}"
+         alt="Celery" />
+    <div class="description">
+        <p>
+            И, конечно, первую скрипку на этой сцене играет
+            <a href="celeryq.com">Celery</a>. В нем много всего:
+            много бэкендов, много фич, много документации и, как следствие,
+            много кода.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.014.png') }}"
+         alt="Celery: backends" />
+    <div class="description">
+        <p>
+            Celery по умолчанию поддерживает AMQP-бэкенд и рекомендует
+            использовать RabbitMQ. Но через специальный адаптер работает
+            и с redis (мой выбор), ZeroMQ и многими другими.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.015.png') }}"
+         alt="Celery: features" />
+    <div class="description">
+        <p>
+            У Celery есть очень интересные возможности: он позволяет не только
+            выполнять отложенные задания, но планировать их выполнение и
+            выполнять их периодически; умеет работать с веб-хуками, так что
+            он не ограничивает клиентов толкьо Python; он умеет ограничивать
+            частоту выполнения заданий; ему можно настроить повтор определенных
+            заданий; группировать задания в "тасксеты" и хранить результаты
+            выполнения используя различные бэкенды.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.016.png') }}"
+         alt="Celery: features" />
+    <div class="description">
+        <p>
+        Обратная сторона богатого набора фич Celery — его размер. Согласитесь,
+        ставить в зависимостях Celery для небольшого приложения будет перебор.
+        Поэтому я бы рекомендовал Celery в том случае, если вы действительно не
+        можете жить без его фич. 
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.017.png') }}"
+         alt="Appendix" />
+    <div class="description">
+        <p>
+        Вероятно вы хотели бы, чтобы я упомянул о чем-нибудь еще, но формат
+        не позволяет осветить больше. Возможно что-нибудь из этого вам
+        покажется интересным.
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.018.png') }}"
+         alt="Enough bicycles!" />
+    <div class="description">
+        <p>
+        Друзья, я прошу вас использовать, развивать,
+        рекламировать, пропагандировать уже существующие решения. Они
+        действительно хороши. Хватит наколенных поделок и велосипедов!
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.019.png') }}"
+         alt="Thanks" />
+    <div class="description">
+        <p>
+        Спасибо за внимание. Если у вас есть вопросы или комментарии к слайдам — воспользуйтесь FriendFeed ;)
+        </p>
+    </div>
+</div>
+
+<div class="slide">
+    <img width="512" height="384" src="{{ url_for('static/img/pycon-ua-2010/queue.020.png') }}"
+         alt="Credits" />
+    <div class="description">
+        <p>
+        Спасибо Flickr и Creative Commons за великолепные фото.</p>
+    </div>
+</div>
+
+
+
+{% endmark %}
